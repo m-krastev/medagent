@@ -1,149 +1,71 @@
-"""
-Main entry point for the Medical Diagnostic Agent application.
-"""
 import asyncio
+import os
 import logging
-import subprocess
-import time
-import requests
-import uuid
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+from src.core.orchestrator import MedicalOrchestrator
+from src.utils.logging_setup import setup_logging
 
-from google.adk.runners import Runner
-from google.genai import types
+# Setup Logger
+setup_logging()
+logger = logging.getLogger("Main")
 
-import utils.logging_config
-from utils.config import get_google_api_key, APP_NAME, USER_ID, IMAGING_AGENT_URL
-from agents.diagnostic_agent import get_diagnostic_agent
-from services.session_manager import get_session_service
-from services.memory_manager import get_memory_service
+app = typer.Typer()
+console = Console()
 
-logger = logging.getLogger(__name__)
-
-def start_imaging_server():
-    """Starts the Uvicorn server for the imaging agent in a background process."""
-    try:
-        # Check if the API key is available before starting the server
-        get_google_api_key()
-    except ValueError as e:
-        logger.error(f"Cannot start imaging server: {e}")
-        return None
-
-    command = [
-        "uvicorn",
-        "imaging.imaging_server:app",
-        "--host", "localhost",
-        "--port", "8001"
-    ]
-    
-    logger.info("Starting Imaging Agent A2A server in the background...")
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    
-    # Wait for the server to be ready
-    max_attempts = 10
-    for attempt in range(max_attempts):
-        try:
-            response = requests.get(f"{IMAGING_AGENT_URL}/.well-known/agent-card.json", timeout=2)
-            if response.status_code == 200:
-                logger.info("✅ Imaging Agent server is running and accessible.")
-                return process
-        except requests.exceptions.RequestException:
-            time.sleep(1)
-            
-    logger.error("Imaging Agent server failed to start. Continuing without imaging capabilities.")
-    process.terminate()
-    return None
-
-async def main():
-    """Main application loop."""
-    logger.info("Initializing Medical Diagnostic Agent System...")
-
-    try:
-        # This will raise an error if the key is not set, stopping execution early.
-        get_google_api_key()
-    except ValueError as e:
-        logger.critical(f"FATAL: {e}")
-        logger.critical("Please set your GOOGLE_API_KEY in the .env file and restart.")
+async def run_diagnosis(complaint: str):
+    """
+    Runs the diagnostic loop for a given complaint.
+    """
+    if not os.environ.get("GOOGLE_API_KEY"):
+        console.print("[bold red]❌ Error: GOOGLE_API_KEY environment variable required.[/bold red]")
         return
 
-    # Start the imaging server as a separate process
-    imaging_server_process = start_imaging_server()
+    # Check for RAG data
+    if not os.path.exists("data/chroma_db"):
+        console.print("[bold yellow]⚠️  RAG Database not found.[/bold yellow]")
+        console.print("   Please run: [green]python scripts/ingest_data.py[/green]")
+        return
+
+    orchestrator = MedicalOrchestrator()
     
-    # Setup ADK components
-    session_service = get_session_service()
-    memory_service = get_memory_service()
-    diagnostic_agent = get_diagnostic_agent()
-
-    runner = Runner(
-        agent=diagnostic_agent,
-        app_name=APP_NAME,
-        session_service=session_service,
-        memory_service=memory_service
-    )
-
-    session_id = f"diag_session_{uuid.uuid4().hex[:8]}"
-    logger.info(f"Starting new diagnostic session: {session_id}")
+    console.print(Panel.fit(f"[bold blue]Processing Complaint:[/bold blue] {complaint}", title="🏥 MedAgent"))
     
     try:
-        await session_service.create_session(app_name=APP_NAME, user_id=USER_ID, session_id=session_id)
-    except Exception:
-        await session_service.get_session(app_name=APP_NAME, user_id=USER_ID, session_id=session_id)
+        final_case = await orchestrator.run_diagnostic_loop(complaint)
+        
+        console.print("\n")
+        console.rule("[bold green]FINAL MEDICAL REPORT[/bold green]")
+        console.print(f"[bold]DIAGNOSIS:[/bold] {final_case.final_diagnosis}")
+        console.print(Panel(Markdown(final_case.research_notes[-1] if final_case.research_notes else "No research notes available."), title="Physician Handoff"))
+        console.print("\n[dim]DISCLAIMER: AI-generated content. Not professional medical advice.[/dim]")
+        
+    except Exception as e:
+        logger.exception("System Crash")
+        console.print(f"[bold red]System Error:[/bold red] {e}")
 
-    print("\n--- Medical Diagnostic Assistant ---")
-    print("Welcome, Doctor. Please describe the patient's initial symptoms.")
-    print("Type 'exit' to end the session.")
+@app.command()
+def run():
+    """
+    Interactive mode to enter patient complaints.
+    """
+    console.print(Panel.fit("[bold cyan]GOOGLE ADK ENTERPRISE MEDICAL SYSTEM v1.0[/bold cyan]", border_style="cyan"))
+    
+    complaint = typer.prompt("Enter Patient Complaint")
+    if not complaint:
+        complaint = "65M with high fever, productive cough, and chest pain."
+        console.print(f"[dim]Using default: {complaint}[/dim]")
+    
+    asyncio.run(run_diagnosis(complaint))
 
-    try:
-        while True:
-            user_input = input("\n> ")
-            if user_input.lower() == 'exit':
-                break
-
-            message = types.Content(role="user", parts=[types.Part(text=user_input)])
-            
-            async for event in runner.run_async(
-                user_id=USER_ID, session_id=session_id, new_message=message
-            ):
-                if event.is_final_response() and event.content:
-                    for part in event.content.parts:
-                        if part.text:
-                            print(f"\nAssistant:\n{part.text}")
-                
-                # Handle human-in-the-loop for clarifying questions or approvals
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.function_call and part.function_call.name == "adk_request_confirmation":
-                            hint = part.function_call.args.get("hint", "Awaiting input...")
-                            print(f"\n[ACTION REQUIRED] {hint}")
-                            
-                            # In a real app, this would involve a UI. Here we simulate with CLI input.
-                            human_response = input("> ")
-                            
-                            confirmation_response = types.FunctionResponse(
-                                id=part.function_call.id,
-                                name="adk_request_confirmation",
-                                response={"confirmed": True, "details": human_response}
-                            )
-                            response_message = types.Content(role="user", parts=[types.Part(function_response=confirmation_response)])
-                            
-                            # Resume the runner
-                            async for resume_event in runner.run_async(
-                                user_id=USER_ID, session_id=session_id, new_message=response_message, invocation_id=event.invocation_id
-                            ):
-                                if resume_event.is_final_response() and resume_event.content:
-                                    for resume_part in resume_event.content.parts:
-                                        if resume_part.text:
-                                            print(f"\nAssistant:\n{resume_part.text}")
-
-    except KeyboardInterrupt:
-        print("\nSession interrupted by user.")
-    finally:
-        if imaging_server_process:
-            logger.info("Shutting down the imaging server...")
-            imaging_server_process.terminate()
-            imaging_server_process.wait()
-        print("Session ended. Goodbye.")
-
+@app.command()
+def diagnose(complaint: str):
+    """
+    One-shot diagnosis for a specific complaint.
+    """
+    asyncio.run(run_diagnosis(complaint))
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
+    app()
