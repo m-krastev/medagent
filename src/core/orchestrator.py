@@ -106,14 +106,26 @@ class MedicalOrchestrator:
                     case
                 )
                 
-                # If more info needed, ask the user
+                # If more info needed, ask the user if they want to provide it
                 if "MORE_INFO_NEEDED:" in info_assessment:
                     question = info_assessment.split("MORE_INFO_NEEDED:")[1].strip()
                     console.print(f"\n🤖 [bold blue]DOCTOR ASKS[/bold blue]: {question}")
-                    user_answer = console.input("[bold cyan]👤 PATIENT ANSWER[/bold cyan]: ")
-                    if user_answer.strip():
-                        case.history_present_illness += f"\n[Interview] Q: {question} A: {user_answer}"
-                        logger.info(f"User provided: {user_answer}")
+                    
+                    # Give user choice
+                    console.print("\n[bold cyan]Options:[/bold cyan]")
+                    console.print("1. Provide more information")
+                    console.print("2. Proceed to diagnosis with current information")
+                    
+                    choice = console.input("[bold cyan]👤 Your choice (1 or 2)[/bold cyan]: ").strip()
+                    
+                    if choice == "1":
+                        user_answer = console.input("[bold cyan]👤 PATIENT ANSWER[/bold cyan]: ")
+                        if user_answer.strip():
+                            case.history_present_illness += f"\n[Interview] Q: {question} A: {user_answer}"
+                            logger.info(f"User provided: {user_answer}")
+                    elif choice == "2":
+                        console.print("\n[bold yellow]Proceeding to diagnosis with current information...[/bold yellow]")
+                        break  # Exit the loop to finalize diagnosis
                 
                 # Refine Hypothesis based on new data
                 if i < MAX_LOOPS - 1:

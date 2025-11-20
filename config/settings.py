@@ -13,9 +13,7 @@ class SystemSettings(BaseSettings):
     GOOGLE_API_KEY: str = Field(..., description="Gemini API Key")
     
     # --- Model Selection ---
-    # Flash: Used for high-throughput, low-latency tasks (Triage, Evidence)
     MODEL_FAST: str = "gemini-2.5-flash-lite"
-    # Pro: Used for complex reasoning (Diagnosis, Judging, Research)
     MODEL_REASONING: str = "gemini-2.5-flash-lite"
     # Embeddings: For RAG
     MODEL_EMBEDDING: str = "models/text-embedding-004"
