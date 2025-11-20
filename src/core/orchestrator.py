@@ -4,12 +4,14 @@ from typing import Optional
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
+from rich.console import Console
 
 from src.domain.models import PatientCase, LabResult, ImagingReport
 from src.domain.exceptions.medical import EmergencyAbortException
 from src.core.agent_factory import AgentFactory
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 class MedicalOrchestrator:
     """
@@ -55,7 +57,7 @@ class MedicalOrchestrator:
 
     async def run_diagnostic_loop(self, initial_complaint: str) -> PatientCase:
         """
-        Executes the full diagnostic workflow.
+        Executes the full diagnostic workflow with interactive information gathering.
         """
         # 1. Initialization
         case = PatientCase(chief_complaint=initial_complaint)
@@ -81,8 +83,8 @@ class MedicalOrchestrator:
             hypo_out = await self._invoke_agent("hypothesis", "Generate Differential Diagnosis.", case)
             case.differential_diagnosis.append(hypo_out)
             
-            # 4. The Judge Loop (Max 5 turns)
-            MAX_LOOPS = 5
+            # 4. The Judge Loop (Max 3 turns to respect API rate limits)
+            MAX_LOOPS = 3
             for i in range(MAX_LOOPS):
                 logger.info(f"--- Diagnostic Loop {i+1}/{MAX_LOOPS} ---")
                 
@@ -96,6 +98,22 @@ class MedicalOrchestrator:
                 
                 # Dispatch Commands
                 await self._dispatch_command(decision, case)
+                
+                # 4.1 Assess if more information is needed
+                info_assessment = await self._invoke_agent(
+                    "info_assessor", 
+                    "Evaluate if sufficient clinical information has been gathered.", 
+                    case
+                )
+                
+                # If more info needed, ask the user
+                if "MORE_INFO_NEEDED:" in info_assessment:
+                    question = info_assessment.split("MORE_INFO_NEEDED:")[1].strip()
+                    console.print(f"\n🤖 [bold blue]DOCTOR ASKS[/bold blue]: {question}")
+                    user_answer = console.input("[bold cyan]👤 PATIENT ANSWER[/bold cyan]: ")
+                    if user_answer.strip():
+                        case.history_present_illness += f"\n[Interview] Q: {question} A: {user_answer}"
+                        logger.info(f"User provided: {user_answer}")
                 
                 # Refine Hypothesis based on new data
                 if i < MAX_LOOPS - 1:

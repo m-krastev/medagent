@@ -1502,3 +1502,65 @@ google.genai.errors.ClientError: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429,
 2025-11-19 00:04:14,707 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
 2025-11-19 00:04:17,327 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
 2025-11-19 00:04:17,329 - src.core.orchestrator - INFO - Agent judge finished.
+2025-11-20 19:43:50,256 - src.core.orchestrator - INFO - Starting Case 2c445356-4295-4509-892f-06ee66b6a428: 65M with high fever, productive cough, and chest pain.
+2025-11-20 19:43:50,256 - src.core.orchestrator - INFO - Invoking Agent: TRIAGE
+2025-11-20 19:43:51,125 - google_adk.google.adk.models.google_llm - INFO - Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2025-11-20 19:43:51,125 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2025-11-20 19:43:53,128 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
+2025-11-20 19:43:53,128 - src.core.orchestrator - INFO - Agent triage finished.
+2025-11-20 19:43:53,128 - src.core.orchestrator - CRITICAL - EMERGENCY PROTOCOL ACTIVATED: ACTION: EMERGENCY_ABORT - Chest pain in a 65-year-old male requires immediate cardiac evaluation.
+2025-11-20 19:48:48,001 - src.core.orchestrator - INFO - Starting Case fc16e317-7e7a-4ccd-8bc0-6f62e4413f1b: 65M with high fever, productive cough, and chest pain.
+2025-11-20 19:48:48,001 - src.core.orchestrator - INFO - Invoking Agent: TRIAGE
+2025-11-20 19:48:48,845 - google_adk.google.adk.models.google_llm - INFO - Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2025-11-20 19:48:48,849 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2025-11-20 19:48:50,944 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
+2025-11-20 19:48:50,948 - src.core.orchestrator - INFO - Agent triage finished.
+2025-11-20 19:48:50,949 - src.core.orchestrator - CRITICAL - EMERGENCY PROTOCOL ACTIVATED: ACTION: EMERGENCY_ABORT
+Reason: Patient presents with chest pain, high fever, and productive cough, which raises immediate concern for conditions such as acute coronary syndrome, pulmonary embolism, severe pneumonia, or sepsis. This requires immediate in-person medical evaluation.
+2025-11-20 19:50:54,860 - src.core.orchestrator - INFO - Starting Case 6cdf3624-62d8-4198-917b-3f50e1cd6a6e: 65M with high fever, productive cough, and chest pain.
+2025-11-20 19:50:54,860 - src.core.orchestrator - INFO - Invoking Agent: TRIAGE
+2025-11-20 19:50:56,225 - google_adk.google.adk.models.google_llm - INFO - Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2025-11-20 19:50:56,226 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2025-11-20 19:50:58,861 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
+2025-11-20 19:50:58,865 - src.core.orchestrator - INFO - Agent triage finished.
+2025-11-20 19:50:58,865 - src.core.orchestrator - CRITICAL - EMERGENCY PROTOCOL ACTIVATED: ACTION: EMERGENCY_ABORT
+REASON: Patient is a 65-year-old male presenting with chest pain, high fever, and productive cough. Chest pain in this demographic is a critical red flag requiring immediate in-person medical evaluation to rule out acute coronary syndrome, severe pneumonia, or other life-threatening conditions.
+2025-11-20 19:56:18,072 - src.core.orchestrator - INFO - Starting Case f93102bd-cc21-4444-b9dc-4ce4172b7e9f: Chest pain
+2025-11-20 19:56:18,073 - src.core.orchestrator - INFO - Invoking Agent: TRIAGE
+2025-11-20 19:56:18,994 - google_adk.google.adk.models.google_llm - INFO - Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2025-11-20 19:56:18,994 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2025-11-20 19:56:20,797 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
+2025-11-20 19:56:20,797 - src.core.orchestrator - INFO - Agent triage finished.
+2025-11-20 19:56:20,797 - src.core.orchestrator - CRITICAL - EMERGENCY PROTOCOL ACTIVATED: ACTION: EMERGENCY_ABORT - Immediate concern for life-threatening cardiac event given chief complaint of "Chest pain."
+2025-11-20 19:56:53,909 - src.core.orchestrator - INFO - Starting Case 6fdaff4a-038d-4a5b-9a99-c2b006ec47ff: Runny nose
+2025-11-20 19:56:53,910 - src.core.orchestrator - INFO - Invoking Agent: TRIAGE
+2025-11-20 19:56:54,816 - google_adk.google.adk.models.google_llm - INFO - Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2025-11-20 19:56:54,816 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2025-11-20 19:56:56,394 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
+2025-11-20 19:56:56,397 - src.core.orchestrator - INFO - Agent triage finished.
+2025-11-20 19:56:56,397 - src.core.orchestrator - INFO - Invoking Agent: HYPOTHESIS
+2025-11-20 19:56:56,397 - google_adk.google.adk.runners - WARNING - Event from an unknown agent: triage_agent, event id: bc1bd8ab-34cd-451d-9a75-905522a77939
+2025-11-20 19:56:57,257 - google_adk.google.adk.models.google_llm - INFO - Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2025-11-20 19:56:57,260 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2025-11-20 19:56:57,981 - google_genai._api_client - INFO - Retrying google.genai._api_client.BaseApiClient._async_request_once in 1.2100293837273208 seconds as it raised ServerError: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'The model is overloaded. Please try again later.', 'status': 'UNAVAILABLE'}}.
+2025-11-20 19:57:00,732 - google_genai._api_client - INFO - Retrying google.genai._api_client.BaseApiClient._async_request_once in 2.544044142215888 seconds as it raised ServerError: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'The model is overloaded. Please try again later.', 'status': 'UNAVAILABLE'}}.
+2025-11-20 19:57:12,161 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
+2025-11-20 19:57:12,164 - src.core.orchestrator - INFO - Agent hypothesis finished.
+2025-11-20 19:57:12,167 - src.core.orchestrator - INFO - --- Diagnostic Loop 1/1 ---
+2025-11-20 19:57:12,167 - src.core.orchestrator - INFO - Invoking Agent: JUDGE
+2025-11-20 19:57:12,174 - google_adk.google.adk.runners - WARNING - Event from an unknown agent: hypothesis_agent, event id: 4d8ebaa7-3cd6-444c-a4d3-0095ab4ecbef
+2025-11-20 19:57:12,175 - google_adk.google.adk.runners - WARNING - Event from an unknown agent: triage_agent, event id: bc1bd8ab-34cd-451d-9a75-905522a77939
+2025-11-20 19:57:13,012 - google_adk.google.adk.models.google_llm - INFO - Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2025-11-20 19:57:13,012 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2025-11-20 19:57:13,435 - google_genai._api_client - INFO - Retrying google.genai._api_client.BaseApiClient._async_request_once in 1.0618873534622246 seconds as it raised ServerError: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'The model is overloaded. Please try again later.', 'status': 'UNAVAILABLE'}}.
+2025-11-20 19:57:17,568 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
+2025-11-20 19:57:17,572 - src.core.orchestrator - INFO - Agent judge finished.
+2025-11-20 19:57:17,572 - src.core.orchestrator - INFO - Invoking Agent: INFO_ASSESSOR
+2025-11-20 19:57:17,578 - google_adk.google.adk.runners - WARNING - Event from an unknown agent: judge_agent, event id: 55dbadea-e102-4046-8ab6-6ae813f83b1d
+2025-11-20 19:57:17,579 - google_adk.google.adk.runners - WARNING - Event from an unknown agent: hypothesis_agent, event id: 4d8ebaa7-3cd6-444c-a4d3-0095ab4ecbef
+2025-11-20 19:57:17,580 - google_adk.google.adk.runners - WARNING - Event from an unknown agent: triage_agent, event id: bc1bd8ab-34cd-451d-9a75-905522a77939
+2025-11-20 19:57:18,430 - google_adk.google.adk.models.google_llm - INFO - Sending out request, model: gemini-2.5-flash, backend: GoogleLLMVariant.GEMINI_API, stream: False
+2025-11-20 19:57:18,431 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2025-11-20 19:57:22,785 - google_adk.google.adk.models.google_llm - INFO - Response received from the model.
+2025-11-20 19:57:22,785 - src.core.orchestrator - INFO - Agent info_assessor finished.
+2025-11-20 19:58:07,344 - src.core.orchestrator - INFO - User provided: I have a temperature of 33 degrees Celsius and a heart rate of 300bpm. I do not know the other stats

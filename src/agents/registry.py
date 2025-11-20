@@ -3,7 +3,7 @@ from google.adk.models.google_llm import Gemini
 from config.settings import settings
 from config.prompts import (
     TRIAGE_PROMPT, HYPOTHESIS_PROMPT, JUDGE_PROMPT,
-    EVIDENCE_PROMPT, IMAGING_PROMPT, RESEARCH_PROMPT
+    EVIDENCE_PROMPT, IMAGING_PROMPT, RESEARCH_PROMPT, INFO_ASSESSOR_PROMPT
 )
 from src.infrastructure.external.simulators import tool_order_labs, tool_order_imaging
 from src.infrastructure.rag.engine import tool_consult_guidelines
@@ -51,4 +51,11 @@ def create_research_agent() -> LlmAgent:
         name="research_agent",
         instruction=RESEARCH_PROMPT,
         tools=[tool_consult_guidelines]
+    )
+
+def create_info_assessor_agent() -> LlmAgent:
+    return LlmAgent(
+        model=Gemini(model_name=settings.MODEL_FAST, retry_options=settings.retry_options),
+        name="info_assessor_agent",
+        instruction=INFO_ASSESSOR_PROMPT
     )
