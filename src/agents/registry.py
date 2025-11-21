@@ -54,6 +54,5 @@ def create_research_agent() -> LlmAgent:
     return LlmAgent(
         model=Gemini(model_name=settings.MODEL_REASONING, retry_options=settings.retry_options),
         name="research_agent",
-        instruction=RESEARCH_PROMPT,
-        tools=[tool_consult_guidelines]
+        instruction=RESEARCH_PROMPT
     )

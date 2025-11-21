@@ -2,12 +2,15 @@ import asyncio
 import os
 import logging
 import typer
+import warnings
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 from src.core.orchestrator import MedicalOrchestrator
 from src.utils.logging_setup import setup_logging
-from config.settings import settings
+
+# Suppress asyncio unclosed resource warnings (aiohttp cleanup)
+warnings.filterwarnings("ignore", category=ResourceWarning)
 
 # Setup Logger
 setup_logging()
@@ -15,13 +18,16 @@ logger = logging.getLogger("Main")
 
 app = typer.Typer()
 console = Console()
-API_KEY = os.environ.get("GOOGLE_API_KEY")
-async def run_diagnosis(complaint: str):
+
+async def run_diagnosis(show_logs: bool = False):
     """
-    Runs the diagnostic loop for a given complaint.
+    Runs the diagnostic loop with interactive demographic and complaint collection.
     """
-    if not settings.GOOGLE_API_KEY:
-        console.print("[bold red]❌ Error: GOOGLE_API_KEY not set in .env or environment variables.[/bold red]")
+    if not show_logs:
+        logging.getLogger().setLevel(logging.CRITICAL)
+    
+    if not os.environ.get("GOOGLE_API_KEY"):
+        console.print("[bold red]❌ Error: GOOGLE_API_KEY environment variable required.[/bold red]")
         return
 
     # Check for RAG data
@@ -32,10 +38,10 @@ async def run_diagnosis(complaint: str):
 
     orchestrator = MedicalOrchestrator()
     
-    console.print(Panel.fit(f"[bold blue]Processing Complaint:[/bold blue] {complaint}", title="🏥 MedAgent"))
+    console.print(Panel.fit("[bold blue]Medical Diagnostic System[/bold blue]", title="🏥 MedAgent"))
     
     try:
-        final_case = await orchestrator.run_diagnostic_loop(complaint)
+        final_case = await orchestrator.run_diagnostic_loop()
         
         console.print("\n")
         console.rule("[bold green]FINAL MEDICAL REPORT[/bold green]")
@@ -48,25 +54,20 @@ async def run_diagnosis(complaint: str):
         console.print(f"[bold red]System Error:[/bold red] {e}")
 
 @app.command()
-def run():
+def run(show_logs: bool = typer.Option(False, "--show-logs", help="Show log output")):
     """
-    Interactive mode to enter patient complaints.
+    Interactive mode with demographic and complaint collection.
     """
     console.print(Panel.fit("[bold cyan]GOOGLE ADK ENTERPRISE MEDICAL SYSTEM v1.0[/bold cyan]", border_style="cyan"))
-    
-    complaint = typer.prompt("Enter Patient Complaint")
-    if not complaint:
-        complaint = "65M with high fever, productive cough, and chest pain."
-        console.print(f"[dim]Using default: {complaint}[/dim]")
-    
-    asyncio.run(run_diagnosis(complaint))
+    asyncio.run(run_diagnosis(show_logs=show_logs))
 
 @app.command()
-def diagnose(complaint: str):
+def diagnose(complaint: str, show_logs: bool = typer.Option(False, "--show-logs", help="Show log output")):
     """
-    One-shot diagnosis for a specific complaint.
+    One-shot diagnosis for a specific complaint (legacy - not used with new flow).
     """
-    asyncio.run(run_diagnosis(complaint))
+    console.print("[bold yellow]⚠️  Note: Using interactive flow. Complaint parameter ignored.[/bold yellow]")
+    asyncio.run(run_diagnosis(show_logs=show_logs))
 
 if __name__ == "__main__":
     app()
