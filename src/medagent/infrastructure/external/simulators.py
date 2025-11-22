@@ -1,11 +1,12 @@
 import random
+from typing import List
 from ...domain.models import LabResult, ImagingReport
 from ...infrastructure.external.mock_data import LAB_REFERENCE_RANGES, DISEASE_PROFILES
 
 
 class MRIReport:
     """Represents an MRI analysis report."""
-    def __init__(self, region: str, sequences: list, findings: str, impression: str):
+    def __init__(self, region: str, sequences: List[str], findings: str, impression: str):
         self.region = region
         self.sequences = sequences
         self.findings = findings

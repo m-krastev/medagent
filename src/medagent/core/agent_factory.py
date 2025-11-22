@@ -23,5 +23,3 @@ class AgentFactory:
             "radiology": create_radiology_agent(),
             "neurology": create_neurology_agent()
         }
-
-

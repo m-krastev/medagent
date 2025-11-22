@@ -37,7 +37,3 @@ def test_judge_prompt_mentions_specialists():
     assert "CONSULT_RADIOLOGY" in JUDGE_PROMPT
     assert "CONSULT_NEUROLOGY" in JUDGE_PROMPT
     assert "ANALYZE_MRI" in JUDGE_PROMPT
-
-
-
-
