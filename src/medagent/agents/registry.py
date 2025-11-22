@@ -8,9 +8,10 @@ genai.configure(api_key=settings.GOOGLE_API_KEY)
 
 from ..config.prompts import (
     TRIAGE_PROMPT, HYPOTHESIS_PROMPT, JUDGE_PROMPT,
-    EVIDENCE_PROMPT, IMAGING_PROMPT, RESEARCH_PROMPT
+    EVIDENCE_PROMPT, IMAGING_PROMPT, RESEARCH_PROMPT,
+    PATHOLOGY_PROMPT, RADIOLOGY_PROMPT, NEUROLOGY_PROMPT
 )
-from ..infrastructure.external.simulators import tool_order_labs, tool_order_imaging
+from ..infrastructure.external.simulators import tool_order_labs, tool_order_imaging, tool_analyze_mri
 from ..infrastructure.rag.engine import tool_consult_guidelines
 
 def create_triage_agent() -> LlmAgent:
@@ -47,7 +48,7 @@ def create_imaging_agent() -> LlmAgent:
         model=Gemini(model_name=settings.MODEL_FAST, retry_options=settings.retry_options),
         name="imaging_agent",
         instruction=IMAGING_PROMPT,
-        tools=[tool_order_imaging]
+        tools=[tool_order_imaging, tool_analyze_mri]
     )
 
 def create_research_agent() -> LlmAgent:
@@ -55,4 +56,30 @@ def create_research_agent() -> LlmAgent:
         model=Gemini(model_name=settings.MODEL_REASONING, retry_options=settings.retry_options),
         name="research_agent",
         instruction=RESEARCH_PROMPT
+    )
+
+def create_pathology_agent() -> LlmAgent:
+    """Creates a pathology specialist agent for laboratory medicine expertise."""
+    return LlmAgent(
+        model=Gemini(model_name=settings.MODEL_REASONING, retry_options=settings.retry_options),
+        name="pathology_agent",
+        instruction=PATHOLOGY_PROMPT,
+        tools=[tool_order_labs]
+    )
+
+def create_radiology_agent() -> LlmAgent:
+    """Creates a radiology specialist agent for imaging interpretation expertise."""
+    return LlmAgent(
+        model=Gemini(model_name=settings.MODEL_REASONING, retry_options=settings.retry_options),
+        name="radiology_agent",
+        instruction=RADIOLOGY_PROMPT,
+        tools=[tool_order_imaging, tool_analyze_mri]
+    )
+
+def create_neurology_agent() -> LlmAgent:
+    """Creates a neurology specialist agent for neurological consultation expertise."""
+    return LlmAgent(
+        model=Gemini(model_name=settings.MODEL_REASONING, retry_options=settings.retry_options),
+        name="neurology_agent",
+        instruction=NEUROLOGY_PROMPT
     )

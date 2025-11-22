@@ -230,3 +230,4 @@ Thumbs.db
 data/
 *.env
 *.csv
+**/__pycache__/
