@@ -260,6 +260,27 @@ class MedicalOrchestrator:
             ctx = str(case.differential_diagnosis[-1]) if case.differential_diagnosis else ""
             res = await self._invoke_agent("imaging", f"Order {req} with context='{ctx}'", case)
             case.add_log("system", f"Imaging Report Received: {res}")
+        
+        elif "ANALYZE_MRI:" in decision:
+            region = decision.split("ANALYZE_MRI:")[1].strip()
+            ctx = str(case.differential_diagnosis[-1]) if case.differential_diagnosis else ""
+            res = await self._invoke_agent("imaging", f"Analyze MRI of {region} with context='{ctx}'", case)
+            case.add_log("system", f"MRI Analysis Received: {res}")
+        
+        elif "CONSULT_PATHOLOGY:" in decision:
+            query = decision.split("CONSULT_PATHOLOGY:")[1].strip()
+            res = await self._invoke_agent("pathology", f"Pathology consultation: {query}", case)
+            case.add_log("system", f"Pathology Consultation: {res}")
+        
+        elif "CONSULT_RADIOLOGY:" in decision:
+            query = decision.split("CONSULT_RADIOLOGY:")[1].strip()
+            res = await self._invoke_agent("radiology", f"Radiology consultation: {query}", case)
+            case.add_log("system", f"Radiology Consultation: {res}")
+        
+        elif "CONSULT_NEUROLOGY:" in decision:
+            query = decision.split("CONSULT_NEUROLOGY:")[1].strip()
+            res = await self._invoke_agent("neurology", f"Neurology consultation: {query}", case)
+            case.add_log("system", f"Neurology Consultation: {res}")
             
         elif "CONSULT_LITERATURE:" in decision:
             query = decision.split("CONSULT_LITERATURE:")[1].strip()

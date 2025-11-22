@@ -229,4 +229,4 @@ Thumbs.db
 # Project specific
 data/
 *.env
-*.csv
+*.csv**/__pycache__/
