@@ -21,7 +21,7 @@ def ingest_medqa():
     logger.info("Downloading MedQA (USMLE) Dataset...")
     try:
         # Streaming subset to avoid massive download
-        dataset = load_dataset("bigbio/med_qa", "med_qa_en_bigbio_qa", split="train", streaming=True)
+        dataset = load_dataset("GBaker/MedQA-USMLE-4-options", split="train")
         
         docs = []
         count = 0
@@ -34,7 +34,7 @@ def ingest_medqa():
                 f"CLINICAL VIGNETTE:\n{row['question']}\n"
                 f"CORRECT ANSWER/DIAGNOSIS:\n{row['answer']}"
             )
-            docs.append(Document(text=text, metadata={"source": "MedQA", "id": row["id"]}))
+            docs.append(Document(text=text, metadata={"source": "MedQA", "id": count}))
             count += 1
             
         logger.info(f"Initializing ChromaDB at {settings.CHROMA_DB_DIR}...")

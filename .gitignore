@@ -50,4 +50,6 @@ logs/
 Thumbs.db
 
 # Project specific
-data/chroma_db/
+data/
+*.env
+*.csv
