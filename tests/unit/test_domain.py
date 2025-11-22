@@ -1,5 +1,5 @@
 import pytest
-from src.domain.models import PatientCase, Vitals, LabResult
+from medagent.domain.models import PatientCase, Vitals, LabResult
 
 def test_vitals_validation():
     """Ensure Pydantic validation works for Vitals."""

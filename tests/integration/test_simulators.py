@@ -1,4 +1,4 @@
-from src.infrastructure.external.simulators import tool_order_labs, tool_order_imaging
+from medagent.infrastructure.external.simulators import tool_order_labs, tool_order_imaging
 
 def test_lab_simulator_logic():
     # Test Infection logic

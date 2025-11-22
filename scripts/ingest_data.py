@@ -10,7 +10,7 @@ from llama_index.core import Document, VectorStoreIndex, StorageContext, Setting
 from llama_index.vector_stores.chroma import ChromaVectorStore
 from llama_index.embeddings.gemini import GeminiEmbedding
 import chromadb
-from config.settings import settings
+from medagent.config.settings import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("DataIngestion")

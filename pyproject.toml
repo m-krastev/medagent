@@ -1,0 +1,24 @@
+[project]
+name = "medagent"
+version = "0.0.0a1"
+description = "Medical Agent powered by Gemini and LlamaIndex"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "google-adk",
+    "google-genai",
+    "llama-index",
+    "llama-index-embeddings-gemini",
+    "llama-index-llms-gemini",
+    "llama-index-vector-stores-chroma",
+    "chromadb",
+    "datasets",
+    "pydantic",
+    "pydantic-settings",
+    "pytest",
+    "typer",
+    "rich",
+]
+
+[project.scripts]
+medagent = "medagent.main:app"
