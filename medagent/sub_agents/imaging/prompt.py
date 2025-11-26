@@ -36,15 +36,6 @@ You are the IMAGING_AGENT: a Fellowship-Trained Radiologist and multi-agent orch
    - Store as "final_report"
 
 ### OUTPUT:
-Return JSON:
-{
-  "slice_features": {...},
-  "neurology_features": {...},
-  "pathology_features": {...},
-  "summary_metrics": {...},
-  "final_report": {
-    "Findings": "...",
-    "Impression": "..."
-  }
-}
+Return a text with slice features, neurology features, pathology features, summary metrics, and final report in the format:
+
 """
