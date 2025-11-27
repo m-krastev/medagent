@@ -2,9 +2,22 @@
 Tools for Medical Orchestrator Root Agent
 State management and workflow coordination tools for the diagnostic process.
 """
+
+import asyncio
+import json
 import logging
-from typing import Optional, Any
+from typing import Any, Dict, List, Literal, Optional
+
+from google.adk.tools import load_artifacts
 from google.adk.tools.tool_context import ToolContext
+
+from medagent.patient_db_tool import (
+    get_patient_data_from_db,
+    get_patient_file_from_db,
+    store_patient_data_in_db,
+    store_patient_file_in_db,
+    store_patient_lab_results_in_db,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -12,18 +25,15 @@ logger = logging.getLogger(__name__)
 # STATE MANAGEMENT TOOLS
 # ============================================================================
 
-def store_patient_data(
-    field: str,
-    value: Any,
-    tool_context: ToolContext
-) -> str:
+
+def store_patient_data(field: str, value: Any, tool_context: ToolContext) -> str:
     """
     Store any patient data field in session state.
-    
+
     Args:
         field: Field name (e.g., 'patient_age', 'patient_sex', 'chief_complaint', 'location')
         value: Value to store (can be string, int, dict, list, etc.)
-    
+
     Returns:
         Confirmation message
     """
@@ -36,7 +46,7 @@ def get_patient_summary(tool_context: ToolContext) -> str:
     """
     Generate clinical summary from session state.
     Compiles all patient data stored in the session.
-    
+
     Returns:
         Formatted clinical case summary
     """
@@ -50,7 +60,7 @@ def get_patient_summary(tool_context: ToolContext) -> str:
     imaging = tool_context.state.get("imaging_reports", [])
     ddx = tool_context.state.get("differential_diagnosis", [])
     final_dx = tool_context.state.get("final_diagnosis", "")
-    
+
     summary = f"""
 === CLINICAL CASE SUMMARY ===
 
@@ -63,22 +73,22 @@ CHIEF COMPLAINT:
 {complaint}
 
 HISTORY OF PRESENT ILLNESS:
-{hpi if hpi else 'Not yet documented'}
+{hpi if hpi else "Not yet documented"}
 
 VITALS:
-{vitals if vitals else 'Not recorded'}
+{vitals if vitals else "Not recorded"}
 
 LABORATORY RESULTS:
-{labs if labs else 'None ordered'}
+{labs if labs else "None ordered"}
 
 IMAGING STUDIES:
-{imaging if imaging else 'None ordered'}
+{imaging if imaging else "None ordered"}
 
 DIFFERENTIAL DIAGNOSIS:
-{chr(10).join(f'- {d}' for d in ddx) if ddx else 'Not yet formulated'}
+{chr(10).join(f"- {d}" for d in ddx) if ddx else "Not yet formulated"}
 
 FINAL DIAGNOSIS:
-{final_dx if final_dx else 'Pending'}
+{final_dx if final_dx else "Pending"}
 """
     return summary.strip()
 
@@ -86,10 +96,10 @@ FINAL DIAGNOSIS:
 def update_differential_diagnosis(diagnosis: str, tool_context: ToolContext) -> str:
     """
     Add or update differential diagnosis list.
-    
+
     Args:
         diagnosis: New or updated differential diagnosis from hypothesis agent
-    
+
     Returns:
         Confirmation message
     """
@@ -99,7 +109,7 @@ def update_differential_diagnosis(diagnosis: str, tool_context: ToolContext) -> 
     else:
         ddx_list = [diagnosis]
     tool_context.state["differential_diagnosis"] = ddx_list
-    
+
     logger.info(f"Updated differential diagnosis (total: {len(ddx_list)})")
     return f"Differential diagnosis updated. Total diagnoses: {len(ddx_list)}"
 
@@ -107,10 +117,10 @@ def update_differential_diagnosis(diagnosis: str, tool_context: ToolContext) -> 
 def finalize_diagnosis(final_diagnosis: str, tool_context: ToolContext) -> str:
     """
     Store final diagnosis and mark case as complete.
-    
+
     Args:
         final_diagnosis: The final diagnostic conclusion
-    
+
     Returns:
         Confirmation message
     """
@@ -123,25 +133,156 @@ def finalize_diagnosis(final_diagnosis: str, tool_context: ToolContext) -> str:
 def increment_diagnostic_loop(tool_context: ToolContext) -> str:
     """
     Increment and check diagnostic loop counter.
-    
+
     Returns:
         Current iteration number
     """
     current = tool_context.state.get("diagnostic_loop_count", 0)
     current += 1
     tool_context.state["diagnostic_loop_count"] = current
-    
+
     logger.info(f"Diagnostic loop iteration: {current}")
     return f"Diagnostic loop iteration {current}"
+
+
+async def access_patient_database(
+    patient_id: str,
+    query_type: Literal["data", "file", "lab_results"],
+    tool_context: ToolContext,
+    item_type: Optional[
+        str
+    ] = None,  # For files: "2D image", "CT", "MRI", "pathology slides", etc.
+    description: Optional[str] = None,  # For storing new data
+    lab_results_string: Optional[str] = None,  # For storing new lab results
+) -> str:
+    """
+    Accesses or updates patient information in the central database.
+    If information is not found, it will ask for further input from the user.
+
+    Args:
+        patient_id: The ID of the patient (e.g., "MM-26").
+        query_type: The type of information to query or store: "data", "file", "lab_results".
+        item_type: (Optional) Required if query_type is "file". Specifies the type of file.
+        description: (Optional) A description for patient_data when storing new data.
+        lab_results_string: (Optional) Lab results string when storing new lab results.
+        tool_context: The ADK context object for interacting with the user and artifacts.
+
+    Returns:
+        A message indicating the result of the operation, including retrieved data.
+    """
+
+    # Ensure patient_id exists as a base entry if we are trying to store
+    if query_type in ["data", "file", "lab_results"] and not get_patient_data_from_db(
+        patient_id
+    ):
+        store_patient_data_in_db(
+            patient_id, f"Placeholder entry for patient {patient_id}", {}
+        )
+        logger.info(f"Created placeholder entry for patient {patient_id} in DB.")
+
+    if query_type == "data":
+        patient_info = get_patient_data_from_db(patient_id)
+        if patient_info and patient_info.get("description"):
+            response = f"Patient Data for {patient_id}:\nDescription: {patient_info['description']}\nMetadata: {json.dumps(patient_info['metadata'])}"
+            if patient_info.get("lab_results_string"):
+                response += f"\nLab Results: {patient_info['lab_results_string']}"
+            tool_context.state[f"patient_data_{patient_id}"] = patient_info
+            return response
+        else:
+            # Ask for description
+            tool_confirmation = tool_context.tool_confirmation
+            if not tool_confirmation:
+                tool_context.request_confirmation(
+                    hint=f"No patient description found for {patient_id}. Please provide a description for this patient.",
+                    payload={"patient_id": patient_id, "data": ""},
+                )
+            user_input = tool_confirmation.payload.get("data", "")
+            store_patient_data_in_db(
+                patient_id, user_input, {}
+            )  # Store with empty metadata for now
+            tool_context.state[f"patient_data_{patient_id}"] = {
+                "description": user_input,
+                "metadata": {},
+            }
+            return f"Patient description for {patient_id} stored: {user_input}"
+
+    elif query_type == "lab_results":
+        patient_info = get_patient_data_from_db(patient_id)
+        if patient_info and patient_info.get("lab_results_string"):
+            response = f"Patient {patient_id} Lab Results: {patient_info['lab_results_string']}"
+            tool_context.state[f"patient_lab_results_{patient_id}"] = patient_info[
+                "lab_results_string"
+            ]
+            return response
+        else:
+            # Ask for lab results
+            tool_confirmation = tool_context.tool_confirmation
+            if not tool_confirmation:
+                tool_context.request_confirmation(
+                    hint=f"No lab results found for {patient_id}. Please provide the lab results as a string.",
+                    payload={"patient_id": patient_id, "lab_results": ""},
+                )
+            user_input = tool_confirmation.payload.get("lab_results", "")
+            store_patient_lab_results_in_db(patient_id, user_input)
+            tool_context.state[f"patient_lab_results_{patient_id}"] = user_input
+            return f"Patient {patient_id} lab results stored: {user_input}"
+
+    elif query_type == "file":
+        if not item_type:
+            return "Error: item_type is required for query_type 'file'."
+
+        files = get_patient_file_from_db(patient_id, item_type)
+        if files:
+            # Return metadata about the file, not the raw blob directly
+            file_info = [{"type": f["type"], "size": len(f["data"])} for f in files]
+            tool_context.state[f"patient_file_{patient_id}_{item_type}"] = file_info
+            return f"Found {len(files)} files of type '{item_type}' for patient {patient_id}: {file_info}"
+        else:
+            # Ask for file upload
+            tool_confirmation = tool_context.tool_confirmation
+            if not tool_confirmation:
+                tool_context.request_confirmation(
+                    hint=f"No '{item_type}' file found for {patient_id}. Please upload the file using the ADK file picker, then type 'DONE'.",
+                    payload={"patient_id": patient_id, "item_type": item_type},
+                )
+            user_response = tool_confirmation.payload.get("user_response", "")
+
+            if user_response.lower() == "done":
+                artifacts = await tool_context.list_artifacts()
+                if not artifacts:
+                    return "No file uploaded. Please upload a file and try again."
+
+                most_recent_file = artifacts[-1]
+                try:
+                    artifact_content = await tool_context.load_artifact(
+                        filename=most_recent_file
+                    )
+                    data_bytes = artifact_content.inline_data.data
+
+                    if data_bytes is None:
+                        return f"Error: No data found in uploaded artifact '{most_recent_file}'."
+
+                    store_patient_file_in_db(patient_id, item_type, data_bytes)
+                    tool_context.state[f"patient_file_{patient_id}_{item_type}"] = {
+                        "type": item_type,
+                        "size": len(data_bytes),
+                    }
+                    return f"'{item_type}' file for patient {patient_id} uploaded and stored. Size: {len(data_bytes)} bytes."
+                except Exception as e:
+                    return f"Error processing uploaded file: {e}"
+            else:
+                return "File upload cancelled by user."
+
+    return "Invalid query_type specified."
 
 
 def check_emergency_status(triage_output: str, tool_context: ToolContext) -> str:
     """
     Check if triage agent returned emergency abort signal.
-    
+
     Args:
         triage_output: Output from triage agent to check
-    
+
     Returns:
         Either "EMERGENCY_DETECTED" or "NO_EMERGENCY"
     """
@@ -166,4 +307,6 @@ __all__ = [
     "finalize_diagnosis",
     "increment_diagnostic_loop",
     "check_emergency_status",
+    "access_patient_database",
+    "load_artifacts",  # For file upload capability
 ]

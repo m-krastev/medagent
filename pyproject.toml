@@ -15,9 +15,11 @@ dependencies = [
     "datasets",
     "pydantic",
     "pydantic-settings",
+    "pandas",
     "pytest",
     "typer",
     "rich",
+    "kagglehub","scikit-image", "nibabel", "pydicom"
 ]
 
 [project.scripts]

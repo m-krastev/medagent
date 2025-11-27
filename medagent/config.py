@@ -23,6 +23,10 @@ class MedAgentSettings(BaseSettings):
     MODEL_FAST: str = Field(default="gemini-2.0-flash-exp", description="Fast model for triage, evidence, imaging")
     MODEL_REASONING: str = Field(default="gemini-2.0-flash-exp", description="Reasoning model for hypothesis, research, orchestrator")
     MODEL_EMBEDDING: str = Field(default="models/text-embedding-004", description="Embedding model for RAG")
+    
+    # ChromaDB Configuration
+    CHROMA_DB_DIR: str = Field(default="./datas/chroma_db", description="Directory path for ChromaDB persistent storage")
+    
 
 
 settings = MedAgentSettings()
