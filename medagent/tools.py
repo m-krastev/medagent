@@ -34,9 +34,10 @@ logger = logging.getLogger(__name__)
 def store_patient_data(field: str, value: Any, tool_context: ToolContext) -> str:
     """
     Store any patient data field in session state.
+    NOTE: For bulk updates, prefer store_patient_data_multiple.
 
     Args:
-        field: Field name (e.g., 'patient_age', 'patient_sex', 'chief_complaint', 'location')
+        field: Field name (e.g., 'patient_id', 'patient_age', 'patient_sex', 'chief_complaint', 'location')
         value: Value to store (can be string, int, dict, list, etc.)
 
     Returns:
@@ -46,6 +47,21 @@ def store_patient_data(field: str, value: Any, tool_context: ToolContext) -> str
     logger.info(f"Stored {field}: {str(value)[:100]}...")
     return f"Successfully stored {field} in patient record"
 
+def store_patient_data_multiple(data: Dict[str, Any], tool_context: ToolContext) -> str:
+    """
+    Store multiple patient data fields in session state.
+    NOTE: SHOULD BE PREFERRED OVER store_patient_data FOR BULK UPDATES.
+
+    Args:
+        data: Dictionary of field names and their corresponding values.
+
+    Returns:
+        Confirmation message
+    """
+    for field, value in data.items():
+        tool_context.state[field] = value
+        logger.info(f"Stored {field}: {str(value)[:100]}...")
+    return f"Successfully stored {len(data)} fields in patient record"
 
 def get_patient_summary(tool_context: ToolContext) -> str:
     """
@@ -151,7 +167,6 @@ def increment_diagnostic_loop(tool_context: ToolContext) -> str:
 
 
 async def access_patient_database(
-    patient_id: str,
     query_type: Literal["data", "file", "lab_results"],
     tool_context: ToolContext,
     item_type: Optional[
@@ -165,7 +180,6 @@ async def access_patient_database(
     If information is not found, it will ask for further input from the user.
 
     Args:
-        patient_id: The ID of the patient (e.g., "MM-26").
         query_type: The type of information to query or store: "data", "file", "lab_results".
         item_type: (Optional) Required if query_type is "file". Specifies the type of file.
         description: (Optional) A description for patient_data when storing new data.
@@ -175,6 +189,10 @@ async def access_patient_database(
     Returns:
         A message indicating the result of the operation, including retrieved data.
     """
+
+    patient_id = tool_context.state.get("patient_id", None)
+    if not patient_id:
+        return "Error: patient_id not found in session state."
 
     # Ensure patient_id exists as a base entry if we are trying to store
     if query_type in ["data", "file", "lab_results"] and not get_patient_data_from_db(
@@ -287,7 +305,6 @@ async def access_patient_database(
 
 
 async def get_patient_raw_file_and_path(
-    patient_id: str,
     file_type: str,
     tool_context: ToolContext,
 ) -> str:
@@ -304,11 +321,12 @@ async def get_patient_raw_file_and_path(
     Returns:
         The path to the temporary file, or an error message if not found.
     """
+    patient_id = tool_context.state.get("patient_id", None)
     files = get_patient_file_from_db(patient_id, file_type)
     if not files:
         return f"Error: No '{file_type}' file found for patient {patient_id} in the database."
 
-    # Assuming only one file of a given type is relevant for analysis at a time
+    # TODO: Assuming only one file of a given type is relevant for analysis at a time
     file_data_blob = files[0]["data"]
     filename = files[0].get("filename", f"patient_{patient_id}_{file_type}")
     mime_type = files[0].get("mime_type", "application/octet-stream")
@@ -366,6 +384,7 @@ def check_emergency_status(triage_output: str, tool_context: ToolContext) -> str
 
 __all__ = [
     "store_patient_data",
+    "store_patient_data_multiple",
     "get_patient_summary",
     "update_differential_diagnosis",
     "finalize_diagnosis",

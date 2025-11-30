@@ -17,6 +17,7 @@ dependencies = [
     "pydantic-settings",
     "pandas",
     "pytest",
+    "pytest-asyncio",
     "typer",
     "rich",
     "kagglehub","scikit-image", "nibabel", "pydicom"

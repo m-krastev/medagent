@@ -13,6 +13,11 @@ from . import tools
 from ...config import settings
 from ...tools import get_patient_raw_file_and_path # Import the new tool
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 async def analyze_patient_image(
     patient_id: str,
     file_type: str,
@@ -37,7 +42,8 @@ async def analyze_patient_image(
         A JSON string of the analysis results or an error message.
     """
     # 1. Retrieve the raw file and get its temporary path
-    temp_file_path = await get_patient_raw_file_and_path(patient_id, file_type, tool_context)
+    temp_file_path: str = await get_patient_raw_file_and_path(patient_id, file_type, tool_context)
+    logging.info(f"Temporary file path for analysis: {temp_file_path}")
 
     if temp_file_path.startswith("Error:"):
         return temp_file_path # Return error if file retrieval failed

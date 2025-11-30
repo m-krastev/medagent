@@ -15,6 +15,7 @@ from .sub_agents.imaging.agent import imaging_agent
 from .sub_agents.research.agent import research_agent
 from .tools import (
     store_patient_data,
+    store_patient_data_multiple,
     get_patient_summary,
     update_differential_diagnosis,
     finalize_diagnosis,
@@ -31,10 +32,12 @@ root_agent = Agent(
     name="medical_orchestrator",
     model=settings.MODEL_REASONING,
     description="Orchestrates multi-agent medical diagnostic workflow through systematic patient assessment, evidence gathering, and clinical reasoning.",
+    # NOTE: The automatic location context injection below will not work properly if deployed, this is just for local testing purposes.
     instruction=prompt.MEDICAL_ORCHESTRATOR_INSTRUCTION + f"\n\n LOCATION CONTEXT: The current user is located in {get_location_from_ip()}.",
     tools=[
         # Patient data management tools
         store_patient_data,
+        store_patient_data_multiple,
         get_patient_summary,
         update_differential_diagnosis,
         finalize_diagnosis,

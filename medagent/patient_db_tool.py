@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 import json
 import os
@@ -6,6 +7,8 @@ import datetime
 from typing import Optional, Dict, List, Any, Union
 
 DB_PATH = "data/patient_db.sqlite"
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def _connect_db():
     """Establishes a connection to the SQLite database."""
@@ -108,18 +111,26 @@ def get_patient_file_from_db(patient_id: str, file_type: Optional[str] = None, m
     conn = _connect_db()
     cursor = conn.cursor()
 
-    query = "SELECT TOP (?) type, data, filename, mime_type, created_at FROM patient_files WHERE patient_id = ?"
-    params: List[Any] = [max_results, patient_id]
+    query = "SELECT type, data, filename, mime_type, created_at FROM patient_files WHERE patient_id = ?"
+    params: List[Any] = [patient_id]
     if file_type:
         query += " AND type = ?"
         params.append(file_type)
-    # Additional optional filters are handled by callers via kwargs in newer signature
+    if max_results is not None:
+        query += " LIMIT ?"
+        params.append(max_results)
+    logging.info(f"Executing query: {query} with params: {params}")
     cursor.execute(query, tuple(params))
     files = cursor.fetchall()
-    conn.close()
 
     if not files:
-        return None
+        # If no matches are found, check for any matching patient_id
+        cursor.execute("SELECT patient_id, type, data, filename, mime_type, created_at FROM patient_files WHERE patient_id = ?", (patient_id,))
+        logging.info(f"No files found for patient_id={patient_id} with type={file_type}. Checking for any files with patient_id only.")
+        files = cursor.fetchall()
+        if not files:
+            return None
+    conn.close()
 
     result: List[Dict[str, Any]] = []
     for f in files:
