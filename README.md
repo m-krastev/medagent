@@ -36,6 +36,8 @@ cp .env.example .env
 
 # Download medical knowledge base
 python scripts/ingest_data.py
+# Set up evaluation cases
+python scripts/setup_evaluation.py
 ```
 
 ### Running with ADK Web Interface
@@ -44,17 +46,7 @@ The recommended way to run MedAgent is using ADK's web interface:
 
 ```bash
 # Run from the project root directory
-adk web --port 8000
-```
-
-Then open http://localhost:8000 in your browser and select the `judge_agent` to start a diagnostic session.
-
-### Alternative: CLI Mode (Legacy)
-
-You can still run the original CLI interface:
-
-```bash
-medagent run
+adk web
 ```
 
 ## Features
@@ -78,10 +70,6 @@ medagent/
 │   ├── evidence/           # Laboratory tests
 │   ├── imaging/            # Radiology studies
 │   └── research/           # Literature consultation
-├── src/medagent/           # Core application code
-│   ├── domain/             # Data models (PatientCase, etc.)
-│   ├── infrastructure/     # Simulators and RAG engine
-│   └── config/             # Settings and configuration
 └── scripts/                # Utility scripts
 ```
 
