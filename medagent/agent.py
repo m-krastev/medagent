@@ -24,13 +24,14 @@ from .tools import (
     get_patient_raw_file_and_path,
     load_artifacts
 )
+from .utils.location import get_location_from_ip
 
 # Create Root Agent with reasoning model
 root_agent = Agent(
     name="medical_orchestrator",
     model=settings.MODEL_REASONING,
     description="Orchestrates multi-agent medical diagnostic workflow through systematic patient assessment, evidence gathering, and clinical reasoning.",
-    instruction=prompt.MEDICAL_ORCHESTRATOR_INSTRUCTION,
+    instruction=prompt.MEDICAL_ORCHESTRATOR_INSTRUCTION + f"\n\n LOCATION CONTEXT: The current user is located in {get_location_from_ip()}.",
     tools=[
         # Patient data management tools
         store_patient_data,

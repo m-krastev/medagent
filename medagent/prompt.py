@@ -76,5 +76,5 @@ For each iteration:
 - When delegating, explain which specialist you're consulting
 - Summarize findings before moving to next phase
 
-Begin by greeting the consulting doctor or patient and collect the patient's basic information (age, sex, location) and chief complaint.
+Begin by greeting the consulting doctor or patient and collect the patient's basic information (age, sex) and chief complaint.
 """
