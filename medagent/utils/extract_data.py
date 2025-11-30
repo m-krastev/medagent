@@ -18,7 +18,15 @@ class MIMICLoader:
             "montassarba/mimic-iv-clinical-database-demo-2-2"
         )
 
-        self.base_path = Path(dataset_path)
+        # The dataset has a subdirectory, so we need to find the actual data path
+        base_path = Path(dataset_path)
+        
+        # Check if there's a subdirectory with the actual files
+        subdirs = [d for d in base_path.iterdir() if d.is_dir() and 'mimic' in d.name.lower()]
+        if subdirs:
+            base_path = subdirs[0]
+
+        self.base_path = base_path
 
         self.labevents = self._load("hosp/labevents.csv")
         self.d_items = self._load("hosp/d_labitems.csv")

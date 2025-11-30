@@ -8,54 +8,56 @@ from ...utils import extract_data
 
 mimic = extract_data.mimic
 
-# LAB_REFERENCE_RANGES = {
-#     "WBC": {"low": 4.5, "high": 11.0, "unit": "K/uL"},
-#     "RBC": {"low": 4.5, "high": 5.9, "unit": "M/uL"},
-#     "HGB": {"low": 13.5, "high": 17.5, "unit": "g/dL"},
-#     "HCT": {"low": 41.0, "high": 50.0, "unit": "%"},
-#     "PLT": {"low": 150, "high": 450, "unit": "K/uL"},
-#     "NA": {"low": 135, "high": 145, "unit": "mmol/L"},
-#     "K": {"low": 3.5, "high": 5.0, "unit": "mmol/L"},
-#     "CREATININE": {"low": 0.7, "high": 1.3, "unit": "mg/dL"},
-#     "GLUCOSE": {"low": 70, "high": 100, "unit": "mg/dL"},
-#     "TROPONIN": {"low": 0.0, "high": 0.04, "unit": "ng/mL"},
-#     "D-DIMER": {"low": 0.0, "high": 500.0, "unit": "ng/mL FEU"},
-#     "LACTATE": {"low": 0.5, "high": 1.0, "unit": "mmol/L"},
-#     "CRP": {"low": 0.0, "high": 10.0, "unit": "mg/L"},
-#     "TSH": {"low": 0.4, "high": 4.0, "unit": "mIU/L"},
-#     "A1C": {"low": 4.0, "high": 5.6, "unit": "%"},
-# }
+LAB_REFERENCE_RANGES = {
+    "WBC": {"low": 4.5, "high": 11.0, "unit": "K/uL"},
+    "RBC": {"low": 4.5, "high": 5.9, "unit": "M/uL"},
+    "HGB": {"low": 13.5, "high": 17.5, "unit": "g/dL"},
+    "HCT": {"low": 41.0, "high": 50.0, "unit": "%"},
+    "PLT": {"low": 150, "high": 450, "unit": "K/uL"},
+    "NA": {"low": 135, "high": 145, "unit": "mmol/L"},
+    "K": {"low": 3.5, "high": 5.0, "unit": "mmol/L"},
+    "CREATININE": {"low": 0.7, "high": 1.3, "unit": "mg/dL"},
+    "GLUCOSE": {"low": 70, "high": 100, "unit": "mg/dL"},
+    "TROPONIN": {"low": 0.0, "high": 0.04, "unit": "ng/mL"},
+    "D-DIMER": {"low": 0.0, "high": 500.0, "unit": "ng/mL FEU"},
+    "LACTATE": {"low": 0.5, "high": 1.0, "unit": "mmol/L"},
+    "CRP": {"low": 0.0, "high": 10.0, "unit": "mg/L"},
+    "TSH": {"low": 0.4, "high": 4.0, "unit": "mIU/L"},
+    "A1C": {"low": 4.0, "high": 5.6, "unit": "%"},
+}
 
-# mimic = extract_data.mimic
+# Use the labevents data already loaded (LAB_NAME mapping is already done in MIMICLoader)
+if not mimic.labevents.empty and "LAB_NAME" in mimic.labevents.columns:
+    labs_of_interest = list(LAB_REFERENCE_RANGES.keys())
+    lab_data = mimic.labevents[mimic.labevents["LAB_NAME"].isin(labs_of_interest)].copy()
+    
+    lab_data = lab_data[lab_data["valuenum"].notna()]
+    def label_lab(row):
+        lab = row["LAB_NAME"]
+        val = row["valuenum"]
+        if lab not in LAB_REFERENCE_RANGES:
+            return "UNKNOWN"
+        low = LAB_REFERENCE_RANGES[lab]["low"]
+        high = LAB_REFERENCE_RANGES[lab]["high"]
 
+        if val < low:
+            return "LOW"
+        if val > high:
+            return "HIGH"
+        return "NORMAL"
 
-# lab_mapping = mimic.d_items.set_index("itemid")["label"].to_dict()
-# mimic.labevents["LAB_NAME"] = mimic.labevents["itemid"].map(lab_mapping)
-
-# labs_of_interest = list(LAB_REFERENCE_RANGES.keys())
-# lab_data = mimic.labevents[mimic.labevents["LAB_NAME"].isin(labs_of_interest)].copy()
-
-# lab_data = lab_data[lab_data["valuenum"].notna()]
-# def label_lab(row):
-#     lab = row["LAB_NAME"]
-#     val = row["valuenum"]
-#     low = LAB_REFERENCE_RANGES[lab]["low"]
-#     high = LAB_REFERENCE_RANGES[lab]["high"]
-
-#     if val < low:
-#         return "LOW"
-#     if val > high:
-#         return "HIGH"
-#     return "NORMAL"
-
-# lab_data["LABEL"] = lab_data.apply(label_lab, axis=1)
-# lab_data["UNIT"] = lab_data["LAB_NAME"].map(lambda x: LAB_REFERENCE_RANGES[x]["unit"])
-# lab_data["LOW"] = lab_data["LAB_NAME"].map(lambda x: LAB_REFERENCE_RANGES[x]["low"])
-# lab_data["HIGH"] = lab_data["LAB_NAME"].map(lambda x: LAB_REFERENCE_RANGES[x]["high"])
-# lab_data = lab_data[
-#     ["subject_id", "hadm_id", "LAB_NAME", "valuenum",
-#      "UNIT", "LOW", "HIGH", "LABEL"]
-# ]
+    lab_data["LABEL"] = lab_data.apply(label_lab, axis=1)
+    lab_data["UNIT"] = lab_data["LAB_NAME"].map(lambda x: LAB_REFERENCE_RANGES.get(x, {}).get("unit", "N/A"))
+    lab_data["LOW"] = lab_data["LAB_NAME"].map(lambda x: LAB_REFERENCE_RANGES.get(x, {}).get("low", 0))
+    lab_data["HIGH"] = lab_data["LAB_NAME"].map(lambda x: LAB_REFERENCE_RANGES.get(x, {}).get("high", 0))
+    lab_data = lab_data[
+        ["subject_id", "hadm_id", "LAB_NAME", "valuenum",
+         "UNIT", "LOW", "HIGH", "LABEL"]
+    ]
+else:
+    # Fallback: empty lab_data if mimic data is not available
+    labs_of_interest = list(LAB_REFERENCE_RANGES.keys())
+    lab_data = pd.DataFrame()
 
 
 def tool_order_labs(
