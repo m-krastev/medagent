@@ -1,0 +1,29 @@
+A 62-year-old woman with a history of type 2 diabetes and early-onset Alzheimer dementia was admitted to the intensive care unit (ICU) one week ago with sepsis. She was found to have Escherichia coli pyelonephritis, was treated with intravenous fluids and appropriate antibiotics, and slowly improved. However, today she developed recurrence of fever and confusion, and she also reports constant abdominal pain.
+
+
+Her current vital signs include a temperature of 38.5°C, a heart rate of 125 beats per minute, a blood pressure of 85/55 mm Hg, a respiratory rate of 25 breaths per minute, and an oxygen saturation of 96% while she receives 2 liters of oxygen via nasal cannula. Her cardiac and lung sounds are normal. She grimaces with palpation of the abdomen, worst in the right upper quadrant.
+
+
+Laboratory testing yields the following results:
+
+
+
+
+|  | Patient value | Reference range |
+| --- | --- | --- |
+| Leukocyte count (per mm3) | 14,200 | 4500–11,000 |
+| Hemoglobin (g/dL) | 12.0 | 12.0–16.0 |
+| Hematocrit (%) | 36.0 | 36.0–46.0 |
+| Platelet count (per mm3) | 265,000 | 150,000–350,000 |
+| Creatinine (mg/dL) | 2.0 | 0.6–1.1 |
+| Bilirubin, total (mg/dL) | 1.2 | 0.3–1.0 |
+| Alkaline phosphatase (U/liter) | 160 | 30–120 |
+| Aspartate aminotransferase (U/liter) | 120 | 0–35 |
+| Alanine aminotransferase (U/liter) | 100 | 0–35 |
+
+
+An abdominal ultrasound, performed one week ago, revealed a normal liver and biliary system. An upright abdominal radiograph is obtained today (figure).
+
+
+What is the most appropriate next imaging study for this patient?
+Answer Choices: (A) Endoscopic ultrasound (B) Cholescintigraphy (C) Endoscopic retrograde cholangiopancreatography (D) Abdominal ultrasound of the right upper quadrant (E) Magnetic resonance cholangiopancreatography
