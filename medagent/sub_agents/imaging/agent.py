@@ -51,6 +51,9 @@ async def analyze_patient_image(
             bins=bins,
             tool_context=tool_context,
         )
+        # Ensure analysis_results is a non-empty dictionary before JSON serialization
+        if not analysis_results:
+            analysis_results = {"status": "warning", "message": "Image analysis returned no results or an empty dictionary."}
         return json.dumps(analysis_results, indent=2)
     except Exception as e:
         return f"Error analyzing image at {temp_file_path}: {e}"

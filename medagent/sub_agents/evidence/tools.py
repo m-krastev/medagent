@@ -110,14 +110,21 @@ import pandas as pd
 #     )
 
 
-def tool_order_labs(
-    test_name: str,
-    hadm_id: Optional[int] = None,
-    subject_id: Optional[int] = None,
-    tool_context: Optional[ToolContext] = None
-) -> str:
+# def tool_order_labs(
+#     test_name: str,
+#     hadm_id: Optional[int] = None,
+#     subject_id: Optional[int] = None,
+#     tool_context: Optional[ToolContext] = None
+# ) -> str:
+#     """
+#     [TOOL] Placeholder for ordering labs.
+#     """
+
+#     return f"Ordered lab test: {test_name} for subject_id={subject_id}, hadm_id={hadm_id}."
+def tool_order_labs() -> dict:
     """
     [TOOL] Placeholder for ordering labs.
+    Do NOT use this tool; it is not yet implemented.
     """
 
-    return f"Ordered lab test: {test_name} for subject_id={subject_id}, hadm_id={hadm_id}."
+    return {"status": "error", "message": "Lab ordering tool is not yet implemented."}

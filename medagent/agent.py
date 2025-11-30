@@ -20,6 +20,9 @@ from .tools import (
     finalize_diagnosis,
     increment_diagnostic_loop,
     check_emergency_status,
+    access_patient_database,
+    get_patient_raw_file_and_path,
+    load_artifacts
 )
 
 # Create Root Agent with reasoning model
@@ -36,6 +39,9 @@ root_agent = Agent(
         finalize_diagnosis,
         increment_diagnostic_loop,
         check_emergency_status,
+        access_patient_database,
+        get_patient_raw_file_and_path,
+        load_artifacts,
         # Sub-agent delegation tools
         AgentTool(agent=triage_agent),
         AgentTool(agent=hypothesis_agent),
