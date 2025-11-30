@@ -6,6 +6,11 @@ State management and workflow coordination tools for the diagnostic process.
 import asyncio
 import json
 import logging
+import asyncio
+import json
+import logging
+import os
+import tempfile
 from typing import Any, Dict, List, Literal, Optional
 
 from google.adk.tools import load_artifacts
@@ -182,29 +187,34 @@ async def access_patient_database(
 
     if query_type == "data":
         patient_info = get_patient_data_from_db(patient_id)
-        if patient_info and patient_info.get("description"):
-            response = f"Patient Data for {patient_id}:\nDescription: {patient_info['description']}\nMetadata: {json.dumps(patient_info['metadata'])}"
+        if patient_info and patient_info.get("question"): # Check for 'question' key
+            response = (
+                f"Patient Data for {patient_id}:\n"
+                f"Question: {patient_info['question']}\n" # Use 'question'
+                f"Options: {json.dumps(patient_info['options'])}" # Use 'options'
+            )
             if patient_info.get("lab_results_string"):
                 response += f"\nLab Results: {patient_info['lab_results_string']}"
             tool_context.state[f"patient_data_{patient_id}"] = patient_info
             return response
         else:
-            # Ask for description
+            # Ask for question (previously description)
             tool_confirmation = tool_context.tool_confirmation
             if not tool_confirmation:
                 tool_context.request_confirmation(
-                    hint=f"No patient description found for {patient_id}. Please provide a description for this patient.",
+                    hint=f"No patient data (question) found for {patient_id}. Please provide the main question or description for this patient.",
                     payload={"patient_id": patient_id, "data": ""},
                 )
             user_input = tool_confirmation.payload.get("data", "")
+            # Store user_input as 'question', options as an empty dict or None
             store_patient_data_in_db(
                 patient_id, user_input, {}
-            )  # Store with empty metadata for now
+            )
             tool_context.state[f"patient_data_{patient_id}"] = {
-                "description": user_input,
-                "metadata": {},
+                "question": user_input, # Store as 'question'
+                "options": {}, # Store as 'options'
             }
-            return f"Patient description for {patient_id} stored: {user_input}"
+            return f"Patient data (question) for {patient_id} stored: {user_input}"
 
     elif query_type == "lab_results":
         patient_info = get_patient_data_from_db(patient_id)
@@ -276,6 +286,60 @@ async def access_patient_database(
     return "Invalid query_type specified."
 
 
+async def get_patient_raw_file_and_path(
+    patient_id: str,
+    file_type: str,
+    tool_context: ToolContext,
+) -> str:
+    """
+    Retrieves a patient file (image, document, etc.) from the database,
+    saves it to a temporary local file, and returns the path to that file.
+    The temporary file will be automatically cleaned up after the session.
+    
+    Args:
+        patient_id: The ID of the patient.
+        file_type: The type of file to retrieve (e.g., "2D image", "CT", "MRI").
+        tool_context: The ADK context object for interacting with the user and artifacts.
+        
+    Returns:
+        The path to the temporary file, or an error message if not found.
+    """
+    files = get_patient_file_from_db(patient_id, file_type)
+    if not files:
+        return f"Error: No '{file_type}' file found for patient {patient_id} in the database."
+
+    # Assuming only one file of a given type is relevant for analysis at a time
+    file_data_blob = files[0]["data"]
+    filename = files[0].get("filename", f"patient_{patient_id}_{file_type}")
+    mime_type = files[0].get("mime_type", "application/octet-stream")
+
+    # Determine file extension from mime_type or use a generic one
+    ext = ".bin"
+    if "image/jpeg" in mime_type:
+        ext = ".jpg"
+    elif "image/png" in mime_type:
+        ext = ".png"
+    elif "dicom" in mime_type or "application/dicom" in mime_type:
+        ext = ".dcm"
+    elif "nifti" in mime_type: # Common for .nii or .nii.gz
+        ext = ".nii" 
+    elif "pdf" in mime_type:
+        ext = ".pdf"
+        
+    # Create a temporary file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+    temp_file.write(file_data_blob)
+    temp_file.close()
+    
+    # Store the path for cleanup
+    if "temp_files_to_delete" not in tool_context.state:
+        tool_context.state["temp_files_to_delete"] = []
+    tool_context.state["temp_files_to_delete"].append(temp_file.name)
+
+    logger.info(f"Retrieved '{file_type}' file for patient {patient_id} and saved to temporary path: {temp_file.name}")
+    return temp_file.name
+
+
 def check_emergency_status(triage_output: str, tool_context: ToolContext) -> str:
     """
     Check if triage agent returned emergency abort signal.
@@ -308,5 +372,6 @@ __all__ = [
     "increment_diagnostic_loop",
     "check_emergency_status",
     "access_patient_database",
+    "get_patient_raw_file_and_path", # New tool for retrieving raw file data
     "load_artifacts",  # For file upload capability
 ]

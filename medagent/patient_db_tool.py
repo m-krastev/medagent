@@ -22,8 +22,12 @@ def _create_tables():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_data (
             patient_id TEXT PRIMARY KEY,
-            description TEXT,
-            metadata TEXT
+            question TEXT,
+            options TEXT,
+            label TEXT,
+            medical_task TEXT,
+            body_system TEXT,
+            question_type TEXT
         )
     """)
 
@@ -53,13 +57,20 @@ def _create_tables():
 _create_tables()
 
 def get_patient_data_from_db(patient_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieves patient data and lab results from the database."""
+    """Retrieves patient data, including question, options, and metadata fields, from the database."""
     conn = _connect_db()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT description, metadata FROM patient_data WHERE patient_id = ?", (patient_id,))
+    # Select all relevant columns from patient_data
+    cursor.execute("""
+        SELECT 
+            patient_id, question, options, label, medical_task, body_system, question_type
+        FROM patient_data 
+        WHERE patient_id = ?
+    """, (patient_id,))
     patient_data = cursor.fetchone()
 
+    # Select lab results
     cursor.execute("SELECT lab_results_string FROM patient_lab_results WHERE patient_id = ?", (patient_id,))
     lab_results = cursor.fetchone()
 
@@ -67,16 +78,23 @@ def get_patient_data_from_db(patient_id: str) -> Optional[Dict[str, Any]]:
 
     if patient_data:
         result = dict(patient_data)
+        
+        # Parse options from JSON string
+        if result['options']:
+            result['options'] = json.loads(result['options'])
+        else:
+            result['options'] = None
+
+        # Add lab results
         if lab_results:
             result['lab_results_string'] = lab_results['lab_results_string']
         else:
             result['lab_results_string'] = None
-        if result['metadata']:
-            result['metadata'] = json.loads(result['metadata'])
+            
         return result
     return None
 
-def get_patient_file_from_db(patient_id: str, file_type: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+def get_patient_file_from_db(patient_id: str, file_type: Optional[str] = None, max_results: Optional[int] = None) -> Optional[List[Dict[str, Any]]]:
     """Retrieves file data from the database.
 
     Supports optional filtering and can return file data as raw bytes or base64-encoded strings.
@@ -84,30 +102,14 @@ def get_patient_file_from_db(patient_id: str, file_type: Optional[str] = None) -
     Args:
         patient_id: ID of the patient.
         file_type: Optional file type to filter by.
-        return_base64: If True, return file data as base64-encoded strings.
-        mime_type: Optional MIME type to filter by.
-        filename_contains: Optional substring that must appear in filename.
         max_results: Optional limit on number of returned rows.
     """
-    def _ensure_columns(conn):
-        # Ensure new optional columns exist (safe no-op if already present)
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(patient_files)")
-        cols = [r[1] for r in cursor.fetchall()]
-        if 'filename' not in cols:
-            cursor.execute("ALTER TABLE patient_files ADD COLUMN filename TEXT")
-        if 'mime_type' not in cols:
-            cursor.execute("ALTER TABLE patient_files ADD COLUMN mime_type TEXT")
-        if 'created_at' not in cols:
-            cursor.execute("ALTER TABLE patient_files ADD COLUMN created_at TEXT")
-        conn.commit()
-
+    
     conn = _connect_db()
-    _ensure_columns(conn)
     cursor = conn.cursor()
 
-    query = "SELECT type, data, filename, mime_type, created_at FROM patient_files WHERE patient_id = ?"
-    params: List[Any] = [patient_id]
+    query = "SELECT TOP (?) type, data, filename, mime_type, created_at FROM patient_files WHERE patient_id = ?"
+    params: List[Any] = [max_results, patient_id]
     if file_type:
         query += " AND type = ?"
         params.append(file_type)
@@ -131,19 +133,35 @@ def get_patient_file_from_db(patient_id: str, file_type: Optional[str] = None) -
         result.append(item)
     return result
 
-def store_patient_data_in_db(patient_id: str, description: str, metadata: Optional[Dict] = None) -> None:
+def store_patient_data_in_db(
+    patient_id: str,
+    question: str,
+    options: Optional[Dict] = None,
+    label: Optional[str] = None,
+    medical_task: Optional[str] = None,
+    body_system: Optional[str] = None,
+    question_type: Optional[str] = None,
+) -> None:
     """Stores or updates patient data in the database."""
     conn = _connect_db()
     cursor = conn.cursor()
-    metadata_json = json.dumps(metadata) if metadata else None
+    options_json = json.dumps(options) if options else None
+    
+    # Ensure patient_id exists (for foreign key constraints elsewhere)
+    cursor.execute("INSERT OR IGNORE INTO patient_data (patient_id) VALUES (?)", (patient_id,))
+
     cursor.execute(
-        "INSERT OR REPLACE INTO patient_data (patient_id, description, metadata) VALUES (?, ?, ?)",
-        (patient_id, description, metadata_json)
+        """
+        INSERT OR REPLACE INTO patient_data (
+            patient_id, question, options, label, medical_task, body_system, question_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (patient_id, question, options_json, label, medical_task, body_system, question_type)
     )
     conn.commit()
     conn.close()
 
-def store_patient_lab_results_in_db(patient_id: str, lab_results_string: str) -> None:
+def store_patient_lab_results_in_db(patient_id: str, lab_results_string: Optional[str]) -> None:
     """Stores or updates patient lab results in the database."""
     conn = _connect_db()
     cursor = conn.cursor()
@@ -198,19 +216,6 @@ def store_patient_file_in_db(
 
     conn = _connect_db()
     cursor = conn.cursor()
-    # Ensure optional columns exist for older DBs
-    cursor.execute("PRAGMA table_info(patient_files)")
-    cols = [r[1] for r in cursor.fetchall()]
-    if 'filename' not in cols:
-        cursor.execute("ALTER TABLE patient_files ADD COLUMN filename TEXT")
-        cols.append('filename')
-    if 'mime_type' not in cols:
-        cursor.execute("ALTER TABLE patient_files ADD COLUMN mime_type TEXT")
-        cols.append('mime_type')
-    if 'created_at' not in cols:
-        cursor.execute("ALTER TABLE patient_files ADD COLUMN created_at TEXT")
-        cols.append('created_at')
-
     # Check if patient_id exists in patient_data, if not, create a placeholder
     cursor.execute("INSERT OR IGNORE INTO patient_data (patient_id) VALUES (?)", (patient_id,))
 

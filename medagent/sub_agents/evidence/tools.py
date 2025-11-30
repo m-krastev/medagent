@@ -1,12 +1,13 @@
 """
 Evidence Agent Tools - Lab ordering and simulation
 """
+from typing import Optional
 from google.adk.tools.tool_context import ToolContext
 from google.adk.plugins.save_files_as_artifacts_plugin import SaveFilesAsArtifactsPlugin
 import pandas as pd
-from ...utils import extract_data 
+# from ...utils import extract_data
 
-mimic = extract_data.mimic
+# mimic = extract_data.mimic
 
 # LAB_REFERENCE_RANGES = {
 #     "WBC": {"low": 4.5, "high": 11.0, "unit": "K/uL"},
@@ -29,6 +30,8 @@ mimic = extract_data.mimic
 # mimic = extract_data.mimic
 
 
+# print(mimic.d_items)
+# print(mimic.labevents.head())
 # lab_mapping = mimic.d_items.set_index("itemid")["label"].to_dict()
 # mimic.labevents["LAB_NAME"] = mimic.labevents["itemid"].map(lab_mapping)
 
@@ -58,51 +61,63 @@ mimic = extract_data.mimic
 # ]
 
 
+# def tool_order_labs(
+#     test_name: str,
+#     hadm_id: Optional[int] = None,
+#     subject_id: Optional[int] = None,
+#     tool_context: Optional[ToolContext] = None
+# ) -> str:
+#     """
+#     [TOOL] Returns actual lab results from MIMIC-IV.
+#     """
+
+#     test_key = test_name.upper()
+#     if test_key not in labs_of_interest:
+#         return f"{test_key}: Not a supported lab test."
+
+#     # Filter relevant rows
+#     df = lab_data[lab_data["LAB_NAME"] == test_key]
+
+#     if hadm_id:
+#         df = df[df["hadm_id"] == hadm_id]
+
+#     if subject_id:
+#         df = df[df["subject_id"] == subject_id]
+
+#     if df.empty:
+#         return f"No results found for {test_key}."
+
+#     row = df.sort_values("valuenum", ascending=False).iloc[0]
+
+#     pulled = {
+#         "test": test_key,
+#         "value": row["valuenum"],
+#         "unit": row["UNIT"],
+#         "flag": row["LABEL"],
+#         "low": row["LOW"],
+#         "high": row["HIGH"],
+#         "subject_id": row["subject_id"],
+#         "hadm_id": row["hadm_id"],
+#     }
+#     if tool_context:
+#         results = tool_context.state.get("temp:lab_results", [])
+#         results.append(pulled)
+#         tool_context.state["temp:lab_results"] = results
+
+#     return (
+#         f"{test_key}: {pulled['value']} {pulled['unit']} "
+#         f"(Range {pulled['low']}-{pulled['high']}) → {pulled['flag']}"
+#     )
+
+
 def tool_order_labs(
     test_name: str,
-    hadm_id: int = None,
-    subject_id: int = None,
-    tool_context: ToolContext = None
+    hadm_id: Optional[int] = None,
+    subject_id: Optional[int] = None,
+    tool_context: Optional[ToolContext] = None
 ) -> str:
     """
-    [TOOL] Returns actual lab results from MIMIC-IV.
+    [TOOL] Placeholder for ordering labs.
     """
 
-    test_key = test_name.upper()
-    if test_key not in labs_of_interest:
-        return f"{test_key}: Not a supported lab test."
-
-    # Filter relevant rows
-    df = lab_data[lab_data["LAB_NAME"] == test_key]
-
-    if hadm_id:
-        df = df[df["hadm_id"] == hadm_id]
-
-    if subject_id:
-        df = df[df["subject_id"] == subject_id]
-
-    if df.empty:
-        return f"No results found for {test_key}."
-
-    row = df.sort_values("valuenum", ascending=False).iloc[0]
-
-    pulled = {
-        "test": test_key,
-        "value": row["valuenum"],
-        "unit": row["UNIT"],
-        "flag": row["LABEL"],
-        "low": row["LOW"],
-        "high": row["HIGH"],
-        "subject_id": row["subject_id"],
-        "hadm_id": row["hadm_id"],
-    }
-    if tool_context:
-        results = tool_context.state.get("temp:lab_results", [])
-        results.append(pulled)
-        tool_context.state["temp:lab_results"] = results
-
-    return (
-        f"{test_key}: {pulled['value']} {pulled['unit']} "
-        f"(Range {pulled['low']}-{pulled['high']}) → {pulled['flag']}"
-    )
-
+    return f"Ordered lab test: {test_name} for subject_id={subject_id}, hadm_id={hadm_id}."

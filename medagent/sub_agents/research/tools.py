@@ -61,6 +61,7 @@ class MedicalKnowledgeEngine:
 
         logger.info(f"Executing RAG Search: {query}")
         response = self._query_engine.query(query)
+        logger.info(f"RAG Search completed. Response: {response}")
         return str(response)
 
 

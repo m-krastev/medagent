@@ -25,7 +25,7 @@ class MedAgentSettings(BaseSettings):
     MODEL_EMBEDDING: str = Field(default="models/text-embedding-004", description="Embedding model for RAG")
     
     # ChromaDB Configuration
-    CHROMA_DB_DIR: str = Field(default="./datas/chroma_db", description="Directory path for ChromaDB persistent storage")
+    CHROMA_DB_DIR: str = Field(default="./data/chroma_db", description="Directory path for ChromaDB persistent storage")
     
 
 

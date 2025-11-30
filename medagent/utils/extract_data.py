@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 import pandas as pd
 import kagglehub
-
+from kagglehub.datasets import KaggleDatasetAdapter
 
 class MIMICLoader:
     """
@@ -14,26 +14,32 @@ class MIMICLoader:
         print("Downloading MIMIC-IV demo dataset from Kaggle...")
 
         # Download the dataset if not already cached
-        dataset_path = kagglehub.dataset_download(
-            "montassarba/mimic-iv-clinical-database-demo-2-2"
+        self.labevents: pd.DataFrame = kagglehub.load_dataset(
+            KaggleDatasetAdapter.PANDAS,
+            "montassarba/mimic-iv-clinical-database-demo-2-2",
+            path="hosp/labevents.csv"
         )
 
-        self.base_path = Path(dataset_path)
+        self.d_items: pd.DataFrame = kagglehub.load_dataset(
+            KaggleDatasetAdapter.PANDAS,
+            "montassarba/mimic-iv-clinical-database-demo-2-2",
+            path="hosp/d_labitems.csv"
 
-        self.labevents = self._load("hosp/labevents.csv")
-        self.d_items = self._load("hosp/d_labitems.csv")
-        self.admissions = self._load("hosp/admissions.csv")
-        self.patients = self._load("hosp/patients.csv")
+        )
+
+        self.admissions: pd.DataFrame = kagglehub.load_dataset(
+            KaggleDatasetAdapter.PANDAS,
+            "montassarba/mimic-iv-clinical-database-demo-2-2",
+            path="hosp/admissions.csv"
+        )
+        self.patients: pd.DataFrame = kagglehub.load_dataset(
+            KaggleDatasetAdapter.PANDAS,
+            "montassarba/mimic-iv-clinical-database-demo-2-2",
+            path="hosp/patients.csv"
+        )
 
         # Create LAB_NAME column
         self._attach_lab_names()
-
-    def _load(self, relative_path: str):
-        """Load a CSV into a pandas DataFrame."""
-        full_path = self.base_path / relative_path
-        if not full_path.exists():
-            return pd.DataFrame()
-        return pd.read_csv(full_path, low_memory=False)
 
     def _attach_lab_names(self):
         """Map itemid → human-readable lab label."""

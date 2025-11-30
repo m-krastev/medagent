@@ -3,12 +3,13 @@ Imaging Agent Tools - Radiology ordering and simulation
 """
 
 from google.adk.tools.tool_context import ToolContext
-
+from typing import Optional, List, Literal # Import Literal
 
 import random
 import numpy as np
 import pydicom
 import nibabel as nib
+from nibabel.nifti1 import Nifti1Image # Import Nifti1Image for type hinting
 from skimage import filters, feature
 from skimage.transform import resize
 
@@ -37,37 +38,43 @@ class LabSimulator:
                 value=0.0,
                 unit="N/A",
                 reference_range="N/A",
-                flag="NORMAL",
+                flag="NORMAL", # This is already Literal compatible
             )
 
         ref = LAB_REFERENCE_RANGES[test_key]
 
         # Context modifier
-        modifier = "NORMAL"
+        modifier: Literal["NORMAL", "HIGH", "LOW", "CRITICAL"] = "NORMAL" # Explicitly type as Literal
         ctx = clinical_context.lower()
 
         for disease, profile in DISEASE_PROFILES.items():
             if disease in ctx and test_key in profile:
-                modifier = profile[test_key]
+                # Ensure assigned values are also Literal compatible
+                if profile[test_key] in ["NORMAL", "HIGH", "LOW", "CRITICAL"]:
+                    modifier = profile[test_key] # type: ignore # type: ignore [assignment]
                 break
 
         # Generate value
+        # Explicitly cast to float to avoid type errors with random.uniform and multiplication
+        ref_low = float(ref["low"])
+        ref_high = float(ref["high"])
+
         if modifier == "NORMAL":
-            val = random.uniform(ref["low"], ref["high"])
+            val = random.uniform(ref_low, ref_high)
         elif modifier == "HIGH":
-            val = random.uniform(ref["high"], ref["high"] * 1.5)
+            val = random.uniform(ref_high, ref_high * 1.5)
         elif modifier == "LOW":
-            val = random.uniform(ref["low"] * 0.5, ref["low"])
+            val = random.uniform(ref_low * 0.5, ref_low)
         elif modifier == "CRITICAL":
-            val = random.uniform(ref["high"] * 2, ref["high"] * 5)
+            val = random.uniform(ref_high * 2, ref_high * 5)
         else:
             val = 0.0
 
         return LabResult(
             test_name=test_key,
             value=round(val, 2),
-            unit=ref["unit"],
-            reference_range=f"{ref['low']}-{ref['high']}",
+            unit=str(ref["unit"]), # Ensure unit is string
+            reference_range=f"{ref_low}-{ref_high}",
             flag=modifier,
         )
 
@@ -146,7 +153,7 @@ class ImageFeatureExtractor:
             return ds.pixel_array.astype(np.float32)
 
         if path.endswith(".nii") or path.endswith(".nii.gz"):
-            img = nib.load(path)
+            img: Nifti1Image = nib.load(path) # type: ignore [assignment] # Explicitly hint the type, ignore potential FileBasedImage assignment issue
             return img.get_fdata().astype(np.float32)
 
         if path.endswith(".npy"):
@@ -236,6 +243,8 @@ img_sim = ImagingSimulator()
 img_feat_extractor = ImageFeatureExtractor()
 
 
+from typing import Optional, List # Import Optional and List for type hints
+
 # =========================
 # TOOL WRAPPERS
 # =========================
@@ -246,28 +255,13 @@ def tool_order_labs(test_name: str, clinical_context: str = "") -> str:
     return str(result)
 
 
-def tool_order_imaging(modality: str, region: str, clinical_context: str = "") -> str:
-    report = img_sim.order_scan(modality, region, clinical_context)
-    return (
-        f"REPORT ID: {report.id}\n"
-        f"FINDINGS: {report.findings}\n"
-        f"IMPRESSION: {report.impression}"
-    )
-
-
-def tool_analyze_image(
-    path: str, slice_index: int = None, operations=None, bins: int = 64
-):
-    return img_feat_extractor.analyze(path, slice_index, operations, bins)
-
-
-def tool_extract_slice(path: str, slice_index: int = None):
+def tool_extract_slice(path: str, slice_index: Optional[int] = None):
     img = img_feat_extractor.load_image(path)
     slice_img = img_feat_extractor.extract_slice(img, slice_index)
     return slice_img.tolist()
 
 
-def tool_order_imaging(modality: str, region: str, clinical_context: str = "", tool_context: ToolContext = None) -> str:
+def tool_order_imaging(modality: str, region: str, clinical_context: str = "", tool_context: Optional[ToolContext] = None) -> str:
     """
     [TOOL] Orders a radiology study.
     
@@ -296,7 +290,7 @@ def tool_order_imaging(modality: str, region: str, clinical_context: str = "", t
     
     return f"REPORT ID: {report.id}\nFINDINGS: {report.findings}\nIMPRESSION: {report.impression}"
 
-def tool_analyze_image(path: str, slice_index: int = None, operations=None, bins: int = 64, tool_context: ToolContext = None):
+def tool_analyze_image(path: str, slice_index: Optional[int] = None, operations: Optional[List[str]] = None, bins: int = 64, tool_context: Optional[ToolContext] = None):
     """
     [TOOL] Analyzes a medical image and extracts features.
     

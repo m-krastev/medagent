@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "adk web",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "google.adk.cli",
+            "cwd": "${workspaceFolder}/",
+            "envFile": "${workspaceFolder}/.env",
+            "justMyCode": false,
+            "args": [
+                "web",
+                "--no-reload",
+                "--log_level",
+                "debug",
+            ]
+        }
+    ]
+}
