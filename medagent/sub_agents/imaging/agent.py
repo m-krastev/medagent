@@ -41,8 +41,11 @@ async def analyze_patient_image(
     Returns:
         A JSON string of the analysis results or an error message.
     """
+    # Store patient_id in state so get_patient_raw_file_and_path can access it
+    tool_context.state["patient_id"] = patient_id
+    
     # 1. Retrieve the raw file and get its temporary path
-    temp_file_path: str = await get_patient_raw_file_and_path(patient_id, file_type, tool_context)
+    temp_file_path: str = await get_patient_raw_file_and_path(file_type, tool_context)
     logging.info(f"Temporary file path for analysis: {temp_file_path}")
 
     if temp_file_path.startswith("Error:"):

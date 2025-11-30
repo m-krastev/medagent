@@ -3,18 +3,25 @@ Research Agent Tools - Medical literature and guideline consultation
 """
 
 import logging
-import chromadb
-from llama_index.core import VectorStoreIndex, StorageContext, Settings
-from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.embeddings.gemini import GeminiEmbedding
-from llama_index.llms.gemini import Gemini
 from ...config import settings
 
 logger = logging.getLogger(__name__)
 
-# Configure LlamaIndex Global Settings
-Settings.embed_model = GeminiEmbedding(model_name=settings.MODEL_EMBEDDING)
-Settings.llm = Gemini(model_name=f"models/{settings.MODEL_FAST}")
+# RAG dependencies are optional
+RAG_AVAILABLE = False
+try:
+    import chromadb
+    from llama_index.core import VectorStoreIndex, StorageContext, Settings
+    from llama_index.vector_stores.chroma import ChromaVectorStore
+    from llama_index.embeddings.gemini import GeminiEmbedding
+    from llama_index.llms.gemini import Gemini
+    
+    # Configure LlamaIndex Global Settings
+    Settings.embed_model = GeminiEmbedding(model_name=settings.MODEL_EMBEDDING)
+    Settings.llm = Gemini(model_name=f"models/{settings.MODEL_FAST}")
+    RAG_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"RAG dependencies not available: {e}. Knowledge base search will be disabled.")
 
 
 class MedicalKnowledgeEngine:
@@ -25,10 +32,15 @@ class MedicalKnowledgeEngine:
     def __init__(self):
         self._index = None
         self._query_engine = None
-        self._initialize_db()
+        if RAG_AVAILABLE:
+            self._initialize_db()
 
     def _initialize_db(self):
         """Initializes connection to ChromaDB."""
+        if not RAG_AVAILABLE:
+            logger.warning("RAG dependencies not installed. Skipping DB initialization.")
+            return
+            
         try:
             logger.info(f"Connecting to ChromaDB at {settings.CHROMA_DB_DIR}")
             db_client = chromadb.PersistentClient(path=settings.CHROMA_DB_DIR)
@@ -54,6 +66,13 @@ class MedicalKnowledgeEngine:
         """
         Executes a semantic search against the medical knowledge base.
         """
+        if not RAG_AVAILABLE:
+            return (
+                "SYSTEM NOTE: RAG dependencies (chromadb, llama-index) are not installed. "
+                "Knowledge base search is unavailable. Please install with: "
+                "pip install chromadb llama-index-vector-stores-chroma llama-index-embeddings-gemini llama-index-llms-gemini"
+            )
+        
         if not self._query_engine:
             return (
                 "SYSTEM ERROR: Knowledge Base is offline. Cannot retrieve guidelines."
