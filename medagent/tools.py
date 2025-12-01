@@ -31,6 +31,69 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
+def load_patient_case(patient_id: str, tool_context: ToolContext) -> str:
+    """
+    Load a patient case from the database and set up the session state.
+    This MUST be called before delegating to sub-agents so they can access patient data.
+    
+    Args:
+        patient_id: The patient ID to load (e.g., "MM-2001", "MM-2000")
+    
+    Returns:
+        Patient case summary or error message
+    """
+    logger.info(f"[load_patient_case] Loading patient case: {patient_id}")
+    
+    # Get patient data from database
+    patient_data = get_patient_data_from_db(patient_id)
+    
+    if not patient_data:
+        logger.error(f"[load_patient_case] Patient {patient_id} not found in database")
+        return f"Error: Patient '{patient_id}' not found in the database. Use tool_get_database_status() to check if the database is loaded."
+    
+    # Store patient_id in state - THIS IS CRITICAL for sub-agents
+    tool_context.state["patient_id"] = patient_id
+    logger.info(f"[load_patient_case] Stored patient_id in state: {patient_id}")
+    
+    # Store other patient data in state
+    question = patient_data.get("question", "")
+    options = patient_data.get("options", {})
+    label = patient_data.get("label", "")
+    medical_task = patient_data.get("medical_task", "")
+    body_system = patient_data.get("body_system", "")
+    
+    tool_context.state["clinical_vignette"] = question
+    tool_context.state["answer_options"] = options
+    tool_context.state["correct_answer"] = label
+    tool_context.state["medical_task"] = medical_task
+    tool_context.state["body_system"] = body_system
+    
+    # Check for patient files (images)
+    files = get_patient_file_from_db(patient_id, file_type="image")
+    image_count = len(files) if files else 0
+    tool_context.state["patient_images"] = [f.get("filename") for f in files] if files else []
+    
+    logger.info(f"[load_patient_case] Loaded case with {image_count} images")
+    
+    # Format response
+    response = f"""
+=== PATIENT CASE LOADED: {patient_id} ===
+
+**Clinical Vignette:**
+{question[:500]}{'...' if len(question) > 500 else ''}
+
+**Answer Options:**
+{chr(10).join(f"({k}) {v}" for k, v in options.items()) if isinstance(options, dict) else options}
+
+**Medical Task:** {medical_task}
+**Body System:** {body_system}
+**Images Available:** {image_count} file(s)
+
+NOTE: Patient ID has been stored in session state. Sub-agents can now access patient data.
+"""
+    return response.strip()
+
+
 def store_patient_data(field: str, value: Any, tool_context: ToolContext) -> str:
     """
     Store any patient data field in session state.
@@ -199,7 +262,8 @@ async def access_patient_database(
         patient_id
     ):
         store_patient_data_in_db(
-            patient_id, f"Placeholder entry for patient {patient_id}", {}
+            patient_id=patient_id, 
+            question=f"Placeholder entry for patient {patient_id}"
         )
         logger.info(f"Created placeholder entry for patient {patient_id} in DB.")
 
@@ -224,13 +288,14 @@ async def access_patient_database(
                     payload={"patient_id": patient_id, "data": ""},
                 )
             user_input = tool_confirmation.payload.get("data", "")
-            # Store user_input as 'question', options as an empty dict or None
+            # Store user_input as 'question'
             store_patient_data_in_db(
-                patient_id, user_input, {}
+                patient_id=patient_id, 
+                question=user_input
             )
             tool_context.state[f"patient_data_{patient_id}"] = {
                 "question": user_input, # Store as 'question'
-                "options": {}, # Store as 'options'
+                "options": None,
             }
             return f"Patient data (question) for {patient_id} stored: {user_input}"
 
@@ -250,6 +315,9 @@ async def access_patient_database(
                     hint=f"No lab results found for {patient_id}. Please provide the lab results as a string.",
                     payload={"patient_id": patient_id, "lab_results": ""},
                 )
+                
+            if not hasattr(tool_confirmation, 'payload'):
+                return "Error: No lab results provided."
             user_input = tool_confirmation.payload.get("lab_results", "")
             store_patient_lab_results_in_db(patient_id, user_input)
             tool_context.state[f"patient_lab_results_{patient_id}"] = user_input
@@ -383,6 +451,7 @@ def check_emergency_status(triage_output: str, tool_context: ToolContext) -> str
 # ============================================================================
 
 __all__ = [
+    "load_patient_case",  # NEW: Load patient from database and set state
     "store_patient_data",
     "store_patient_data_multiple",
     "get_patient_summary",
@@ -391,6 +460,6 @@ __all__ = [
     "increment_diagnostic_loop",
     "check_emergency_status",
     "access_patient_database",
-    "get_patient_raw_file_and_path", # New tool for retrieving raw file data
-    "load_artifacts",  # For file upload capability
+    "get_patient_raw_file_and_path",
+    "load_artifacts",
 ]

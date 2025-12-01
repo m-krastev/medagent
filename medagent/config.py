@@ -20,8 +20,8 @@ class MedAgentSettings(BaseSettings):
     GOOGLE_API_KEY: str = Field(..., description="Gemini API Key")
     
     # Model Selection
-    MODEL_FAST: str = Field(default="gemini-2.0-flash-exp", description="Fast model for triage, evidence, imaging")
-    MODEL_REASONING: str = Field(default="gemini-2.0-flash-exp", description="Reasoning model for hypothesis, research, orchestrator")
+    MODEL_FAST: str = Field(default="gemini-2.5-flash-lite", description="Fast model for triage, evidence, imaging")
+    MODEL_REASONING: str = Field(default="gemini-2.5-flash", description="Reasoning model for hypothesis, research, orchestrator")
     MODEL_EMBEDDING: str = Field(default="models/text-embedding-004", description="Embedding model for RAG")
     
     # ChromaDB Configuration
