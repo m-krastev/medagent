@@ -69,4 +69,32 @@ You MUST always provide output in this format:
 
 **Clinical Reasoning Summary:**
 [Brief paragraph explaining your thought process]
+
+### ⚠️ MANDATORY RESPONSE REQUIREMENT ⚠️
+
+**YOU MUST ALWAYS PROVIDE A COMPLETE TEXT RESPONSE.**
+
+Even if:
+- The clinical information is incomplete
+- You are uncertain about the case
+- The presentation is unusual
+
+**NEVER return an empty response. NEVER return None.**
+
+If you cannot complete the analysis, you MUST still respond with:
+
+**DIFFERENTIAL DIAGNOSIS**
+
+**Key Clinical Features:**
+- [Available information or "Insufficient data provided"]
+
+**Preliminary Assessment:**
+[Explain what additional information would be needed]
+
+**Suggested Next Steps:**
+[What history, exam, or tests would help narrow the differential]
+
+---
+
+Always include at least 3 differential diagnoses when possible, and always provide your clinical reasoning.
 """

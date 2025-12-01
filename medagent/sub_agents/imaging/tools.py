@@ -1,30 +1,29 @@
 """
-Imaging Agent Tools - Radiology ordering and simulation
+Imaging Agent Tools - Radiology ordering and image analysis
 
 This module provides tools for the imaging agent to:
-1. Order and retrieve lab results (from database or simulation)
-2. Order and retrieve imaging studies (from database or simulation)
-3. Analyze medical images (feature extraction)
+1. Order and retrieve lab results (from database ONLY - no simulation)
+2. Order and retrieve imaging studies (from database ONLY - no simulation)
+3. Analyze medical images (feature extraction from actual files)
 
-Priority: Database > Simulation (fallback)
+All results come from the patient database. If data is not available,
+the tool will indicate that the test/study needs to be ordered in real life.
 """
 
 import logging
 import re
 import sys
 from google.adk.tools.tool_context import ToolContext
-from typing import Optional, List, Literal, Dict, Any
+from typing import Optional, List, Dict, Any
 
-import random
 import numpy as np
 import pydicom
 import nibabel as nib
-from nibabel.nifti1 import Nifti1Image # Import Nifti1Image for type hinting
+from nibabel.nifti1 import Nifti1Image
 from skimage import filters, feature
 from skimage.transform import resize
 
 from .models import LabResult, ImagingReport
-from .mock_data import LAB_REFERENCE_RANGES, DISEASE_PROFILES
 
 # Import database functions for real data access
 from ...patient_db_tool import (
@@ -43,176 +42,7 @@ if not logger.handlers:
     formatter = logging.Formatter('[%(name)s] %(levelname)s - %(message)s')
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    # Prevent propagation to avoid duplicate logs
     logger.propagate = False
-
-
-# =========================
-# LAB SIMULATOR
-# =========================
-
-
-class LabSimulator:
-    """
-    Simulates a Pathology Lab.
-    Generates realistic values based on a 'hidden' clinical context.
-    """
-
-    def order_test(self, test_name: str, clinical_context: str) -> LabResult:
-        logger.info(f"[LabSimulator] order_test called - test_name: '{test_name}', clinical_context: '{clinical_context[:100] if clinical_context else 'None'}...'")
-        test_key = test_name.upper()
-
-        # Validate
-        if test_key not in LAB_REFERENCE_RANGES:
-            logger.warning(f"[LabSimulator] Test '{test_key}' not found in LAB_REFERENCE_RANGES. Returning default result.")
-            return LabResult(
-                test_name=test_name,
-                value=0.0,
-                unit="N/A",
-                reference_range="N/A",
-                flag="NORMAL", # This is already Literal compatible
-            )
-
-        ref = LAB_REFERENCE_RANGES[test_key]
-        logger.debug(f"[LabSimulator] Reference range for '{test_key}': {ref}")
-
-        # Context modifier
-        modifier: Literal["NORMAL", "HIGH", "LOW", "CRITICAL"] = "NORMAL" # Explicitly type as Literal
-        ctx = clinical_context.lower()
-
-        for disease, profile in DISEASE_PROFILES.items():
-            if disease in ctx and test_key in profile:
-                # Ensure assigned values are also Literal compatible
-                if profile[test_key] in ["NORMAL", "HIGH", "LOW", "CRITICAL"]:
-                    modifier = profile[test_key] # type: ignore # type: ignore [assignment]
-                    logger.debug(f"[LabSimulator] Disease '{disease}' matched in context. Modifier set to: {modifier}")
-                break
-
-        # Generate value
-        # Explicitly cast to float to avoid type errors with random.uniform and multiplication
-        ref_low = float(ref["low"])
-        ref_high = float(ref["high"])
-
-        if modifier == "NORMAL":
-            val = random.uniform(ref_low, ref_high)
-        elif modifier == "HIGH":
-            val = random.uniform(ref_high, ref_high * 1.5)
-        elif modifier == "LOW":
-            val = random.uniform(ref_low * 0.5, ref_low)
-        elif modifier == "CRITICAL":
-            val = random.uniform(ref_high * 2, ref_high * 5)
-        else:
-            val = 0.0
-
-        result = LabResult(
-            test_name=test_key,
-            value=round(val, 2),
-            unit=str(ref["unit"]), # Ensure unit is string
-            reference_range=f"{ref_low}-{ref_high}",
-            flag=modifier,
-        )
-        logger.info(f"[LabSimulator] order_test completed - Result: {result}")
-        return result
-
-
-# =========================
-# IMAGING SIMULATOR
-# =========================
-
-
-class ImagingSimulator:
-    """
-    Simulates a Radiology Department.
-    """
-
-    def order_scan(
-        self, modality: str, region: str, clinical_context: str
-    ) -> ImagingReport:
-        logger.info(f"[ImagingSimulator] order_scan called - modality: '{modality}', region: '{region}', clinical_context: '{clinical_context[:100] if clinical_context else 'None'}...'")
-        ctx = clinical_context.lower()
-        reg = region.lower()
-
-        findings = "No acute abnormality identified. Normal study."
-        impression = "Normal."
-
-        # Chest patterns
-        if "chest" in reg:
-            logger.debug(f"[ImagingSimulator] Region matched: chest")
-            if "pneumonia" in ctx:
-                findings = (
-                    "Focal consolidation in the right lower lobe with air bronchograms."
-                )
-                impression = "Right Lower Lobe Pneumonia."
-                logger.debug(f"[ImagingSimulator] Pattern matched: pneumonia")
-            elif "heart_failure" in ctx:
-                findings = "Cardiomegaly with interstitial edema and Kerley B lines."
-                impression = "Pulmonary Edema consistent with CHF."
-                logger.debug(f"[ImagingSimulator] Pattern matched: heart_failure")
-            elif "pe" in ctx and "ct" in modality.lower():
-                findings = "Filling defect in the right main pulmonary artery."
-                impression = "Acute Pulmonary Embolism."
-                logger.debug(f"[ImagingSimulator] Pattern matched: PE with CT")
-
-        # Head patterns
-        elif "head" in reg or "brain" in reg:
-            logger.debug(f"[ImagingSimulator] Region matched: head/brain")
-            if "stroke" in ctx:
-                findings = (
-                    "Loss of gray-white differentiation in the left MCA territory."
-                )
-                impression = "Acute Ischemic Stroke."
-                logger.debug(f"[ImagingSimulator] Pattern matched: stroke")
-            elif "bleed" in ctx:
-                findings = "Hyperdense collection in the subarachnoid space."
-                impression = "Subarachnoid Hemorrhage."
-                logger.debug(f"[ImagingSimulator] Pattern matched: bleed")
-
-        # Abdomen patterns
-        elif "abdomen" in reg or "ruq" in reg or "right upper quadrant" in reg or "biliary" in reg or "gallbladder" in reg or "liver" in reg:
-            logger.debug(f"[ImagingSimulator] Region matched: abdomen/biliary")
-            if "appendicitis" in ctx:
-                findings = "Dilated appendix (12mm) with periappendiceal fat stranding."
-                impression = "Acute Appendicitis."
-                logger.debug(f"[ImagingSimulator] Pattern matched: appendicitis")
-            elif "cholecystitis" in ctx:
-                if "us" in modality.lower() or "ultrasound" in modality.lower():
-                    findings = "Gallbladder wall thickening (5mm), pericholecystic fluid, positive sonographic Murphy sign. Multiple gallstones identified."
-                    impression = "Acute Cholecystitis."
-                else:
-                    findings = "Distended gallbladder with wall thickening and pericholecystic inflammatory changes. Gallstones present."
-                    impression = "Acute Cholecystitis."
-                logger.debug(f"[ImagingSimulator] Pattern matched: cholecystitis")
-            elif "cholangitis" in ctx or "biliary" in ctx:
-                findings = "Dilated common bile duct (12mm) with intrahepatic biliary dilatation. Possible distal CBD stone."
-                impression = "Biliary obstruction with findings concerning for Cholangitis."
-                logger.debug(f"[ImagingSimulator] Pattern matched: cholangitis/biliary")
-            elif "choledocholithiasis" in ctx:
-                findings = "Common bile duct dilation (10mm) with echogenic focus in the distal CBD consistent with choledocholithiasis."
-                impression = "Choledocholithiasis with biliary obstruction."
-                logger.debug(f"[ImagingSimulator] Pattern matched: choledocholithiasis")
-            elif "pancreatitis" in ctx:
-                findings = "Pancreatic enlargement with peripancreatic fat stranding and fluid collections."
-                impression = "Acute Pancreatitis."
-                logger.debug(f"[ImagingSimulator] Pattern matched: pancreatitis")
-            elif "abscess" in ctx or "liver abscess" in ctx:
-                findings = "Heterogeneous hepatic lesion with peripheral enhancement, measuring 5cm in the right lobe. Central hypodensity with possible gas locules."
-                impression = "Hepatic abscess."
-                logger.debug(f"[ImagingSimulator] Pattern matched: liver abscess")
-            elif "pyelonephritis" in ctx or "kidney infection" in ctx:
-                findings = "Right kidney shows focal areas of decreased enhancement with perinephric fat stranding."
-                impression = "Acute Pyelonephritis, right kidney."
-                logger.debug(f"[ImagingSimulator] Pattern matched: pyelonephritis")
-            elif "sepsis" in ctx and ("source" in ctx or "focus" in ctx):
-                # Generic abdominal sepsis workup - look for common sources
-                findings = "Hepatic lesion with peripheral rim enhancement in the right lobe, concerning for abscess. No biliary dilatation. Kidneys show no hydronephrosis."
-                impression = "Suspected hepatic abscess - recommend clinical correlation and possible drainage."
-                logger.debug(f"[ImagingSimulator] Pattern matched: sepsis source")
-
-        report = ImagingReport(
-            modality=modality, region=region, findings=findings, impression=impression
-        )
-        logger.info(f"[ImagingSimulator] order_scan completed - Report ID: {report.id}, Impression: '{impression}'")
-        return report
 
 
 # =========================
@@ -351,14 +181,12 @@ class ImageFeatureExtractor:
 
 
 # =========================
-# SINGLETONS
+# SINGLETON
 # =========================
 
-lab_sim = LabSimulator()
-img_sim = ImagingSimulator()
 img_feat_extractor = ImageFeatureExtractor()
 
-logger.info("[ImagingTools] Singletons initialized: LabSimulator, ImagingSimulator, ImageFeatureExtractor")
+logger.info("[ImagingTools] ImageFeatureExtractor initialized")
 
 
 # =========================
@@ -464,8 +292,10 @@ def _parse_lab_results_from_db(lab_results_string: str, test_name: str) -> Optio
 
 def tool_order_labs(test_name: str, clinical_context: str = "", tool_context: Optional[ToolContext] = None) -> dict:
     """
-    Orders a laboratory test. First checks the patient database for existing results,
-    then falls back to simulation if not found.
+    Orders a laboratory test. Retrieves results from the patient database ONLY.
+    
+    If the lab result is not in the patient's record, it indicates the test
+    would need to be ordered in real clinical practice.
     
     Args:
         test_name: Name of the lab test to order (e.g., "WBC", "CRP", "Troponin").
@@ -474,23 +304,29 @@ def tool_order_labs(test_name: str, clinical_context: str = "", tool_context: Op
     
     Returns:
         Dictionary containing test results with status, value, unit, reference range, and flag.
+        If not available, returns status "not_available" with guidance.
     """
     logger.info(f"[TOOL] ========== tool_order_labs CALLED ==========")
     logger.info(f"[TOOL] tool_order_labs - test_name: '{test_name}'")
     logger.info(f"[TOOL] tool_order_labs - clinical_context: '{clinical_context[:50] if clinical_context else 'None'}...'")
-    logger.info(f"[TOOL] tool_order_labs - tool_context available: {tool_context is not None}")
     
-    # PRIORITY 1: Try to get from database
+    # Try to get from database
     db_result = None
+    patient_id = None
+    
     if tool_context:
         patient_id = tool_context.state.get("patient_id")
         if patient_id:
             logger.info(f"[TOOL] tool_order_labs - Checking database for patient {patient_id}")
             patient_data = get_patient_data_from_db(patient_id)
             if patient_data:
-                lab_results_string = patient_data.get("lab_results_string") or patient_data.get("description", "")
-                logger.debug(f"[TOOL] tool_order_labs - Found patient data, parsing lab results...")
-                db_result = _parse_lab_results_from_db(lab_results_string, test_name)
+                # Check lab_results_string first, then look in the question field for embedded labs
+                lab_results_string = patient_data.get("lab_results_string") or ""
+                question_text = patient_data.get("question", "")
+                combined_text = f"{lab_results_string}\n{question_text}"
+                
+                logger.debug(f"[TOOL] tool_order_labs - Parsing lab results from patient data...")
+                db_result = _parse_lab_results_from_db(combined_text, test_name)
                 if db_result:
                     logger.info(f"[TOOL] tool_order_labs - Found {test_name} in database: {db_result['value']} {db_result['unit']}")
     
@@ -505,17 +341,13 @@ def tool_order_labs(test_name: str, clinical_context: str = "", tool_context: Op
             "source": "patient_record"
         }
     else:
-        # PRIORITY 2: Fall back to simulation
-        logger.info(f"[TOOL] tool_order_labs - No database result, using simulation")
-        result = lab_sim.order_test(test_name, clinical_context)
+        # No data available - do NOT simulate
+        logger.info(f"[TOOL] tool_order_labs - Test '{test_name}' not found in patient record")
         response = {
-            "status": "success",
-            "test_name": result.test_name,
-            "value": result.value,
-            "unit": result.unit,
-            "reference_range": result.reference_range,
-            "flag": result.flag,
-            "source": "simulation"
+            "status": "not_available",
+            "test_name": test_name,
+            "message": f"Lab test '{test_name}' is not available in the patient's record. In clinical practice, this test would need to be ordered. Consider if this test is critical for the diagnosis before ordering.",
+            "source": "not_in_record"
         }
     
     # Store result in state if tool_context available
@@ -523,9 +355,8 @@ def tool_order_labs(test_name: str, clinical_context: str = "", tool_context: Op
         lab_results = tool_context.state.get('temp:lab_results', [])
         lab_results.append(response)
         tool_context.state['temp:lab_results'] = lab_results
-        logger.debug(f"[TOOL] tool_order_labs - Stored result in state. Total lab results: {len(lab_results)}")
     
-    logger.info(f"[TOOL] tool_order_labs COMPLETED - {response['test_name']}: {response['value']} {response['unit']} ({response['flag']}) [source: {response.get('source', 'unknown')}]")
+    logger.info(f"[TOOL] tool_order_labs COMPLETED - status: {response['status']}")
     logger.info(f"[TOOL] ========== tool_order_labs END ==========")
     return response
 
@@ -577,44 +408,271 @@ def tool_extract_slice(path: str, slice_index: Optional[int] = None, tool_contex
 
 def tool_order_imaging(modality: str, region: str, clinical_context: str = "", tool_context: Optional[ToolContext] = None) -> str:
     """
-    [TOOL] Orders a radiology study.
+    [TOOL] Orders a radiology study. Checks the patient database for existing imaging reports.
+    
+    If imaging is not available in the patient's record, it indicates the study
+    would need to be ordered in real clinical practice.
     
     Args:
         modality: CT, MRI, XRAY, US.
-        region: Body part (Chest, Head, Abdomen).
+        region: Body part (Chest, Head, Abdomen, RUQ, etc.).
         clinical_context: The suspected condition.
         tool_context: ADK tool context for accessing session state.
     
     Returns:
-        Radiology report with REPORT ID, FINDINGS, and IMPRESSION.
+        Radiology report if available, or guidance that the study needs to be ordered.
     """
     logger.info(f"[TOOL] ========== tool_order_imaging CALLED ==========")
     logger.info(f"[TOOL] tool_order_imaging - modality: '{modality}'")
     logger.info(f"[TOOL] tool_order_imaging - region: '{region}'")
     logger.info(f"[TOOL] tool_order_imaging - clinical_context: '{clinical_context[:100] if clinical_context else 'None'}...'")
-    logger.info(f"[TOOL] tool_order_imaging - tool_context available: {tool_context is not None}")
     
-    # If clinical_context not provided, try to get from state
-    if not clinical_context and tool_context:
-        differential = tool_context.state.get('temp:differential_diagnosis', [])
-        logger.debug(f"[TOOL] tool_order_imaging - Retrieved differential from state: {differential}")
-        if differential:
-            clinical_context = str(differential[-1]) if isinstance(differential, list) else str(differential)
-            logger.info(f"[TOOL] tool_order_imaging - Using clinical_context from state: '{clinical_context}'")
+    patient_id = None
+    if tool_context:
+        patient_id = tool_context.state.get("patient_id")
+        logger.info(f"[TOOL] tool_order_imaging - patient_id from state: '{patient_id}'")
+    else:
+        logger.warning(f"[TOOL] tool_order_imaging - NO tool_context provided!")
     
-    report = img_sim.order_scan(modality, region, clinical_context)
+    # Check if imaging data exists in the patient record
+    imaging_info = None
+    image_files = []
+    radiology_images = []
+    figure_descriptions = {}  # Maps figure letter to what it shows
     
-    # Store result in state if tool_context available
+    if patient_id:
+        # Get patient data first to check clinical vignette
+        patient_data = get_patient_data_from_db(patient_id)
+        question_text = ""
+        if patient_data:
+            question_text = patient_data.get("question", "")
+            
+            # Parse Figure descriptions from clinical vignette
+            # e.g., "A chest radiograph is shown in Figure A" -> {"a": "chest radiograph"}
+            # e.g., "An ECG is shown in Figure A" -> {"a": "ecg"}
+            # e.g., "An abdominal radiograph is obtained (figure)" -> {"a": "abdominal radiograph"}
+            figure_patterns = [
+                r'(?:A|An)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?(?:\s+of\s+the\s+\w+)?)\s+is\s+shown\s+in\s+[Ff]igure\s+([A-Za-z])',
+                r'[Ff]igure\s+([A-Za-z])\s+shows?\s+(?:a|an)?\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)',
+                r'(?:His|Her|The)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)\s+(?:is|are)\s+shown\s+in\s+[Ff]igure\s+([A-Za-z])',
+                # Pattern for "(figure)" without letter - assume it's Figure A
+                r'(?:A|An)\s+([\w\s]+?)\s+is\s+(?:obtained|shown|performed)(?:\s+today)?\s*\(figure\)',
+                # Pattern for "X is performed and shown in Figure Y"
+                r'(?:A|An)\s+([A-Za-z]+)\s+is\s+(?:quickly\s+)?performed\s+and\s+(?:is\s+)?shown\s+in\s+[Ff]igure\s+([A-Za-z])',
+            ]
+            for pattern in figure_patterns:
+                matches = re.findall(pattern, question_text, re.IGNORECASE)
+                for match in matches:
+                    if isinstance(match, tuple) and len(match) == 2:
+                        # Handle both orderings: (description, letter) or (letter, description)
+                        if len(match[0]) == 1 and match[0].isalpha():
+                            letter, desc = match[0].lower(), match[1].lower()
+                        else:
+                            desc, letter = match[0].lower(), match[1].lower()
+                        figure_descriptions[letter] = desc
+                    elif isinstance(match, str):
+                        # Single group match (from "(figure)" pattern) - assume Figure A
+                        figure_descriptions['a'] = match.lower()
+            
+            logger.debug(f"[TOOL] tool_order_imaging - Figure descriptions: {figure_descriptions}")
+        
+        # Check for image files in the database
+        files = get_patient_file_from_db(patient_id, file_type="image")
+        if files:
+            image_files = [f for f in files if f.get("filename")]
+            
+            # Determine which images are radiology based on filename patterns OR clinical vignette
+            for f in image_files:
+                filename = f.get("filename", "").lower()
+                mime = f.get("mime_type", "").lower()
+                
+                # Check if filename indicates radiology format
+                is_radiology_format = any([
+                    "dicom" in mime or "dcm" in filename,
+                    "nifti" in mime or ".nii" in filename,
+                    modality.lower() in filename,
+                    "xray" in filename or "x-ray" in filename,
+                    "mri" in filename,
+                    "ultrasound" in filename or "us_" in filename,
+                    "ct_" in filename or "_ct" in filename,
+                    "radiograph" in filename,
+                ])
+                
+                # Check if this image corresponds to a radiology study mentioned in vignette
+                # e.g., MM-2003-a.jpeg -> check if Figure A is a radiograph
+                is_radiology_from_vignette = False
+                figure_match = re.search(r'-([a-z])\.', filename)
+                if figure_match:
+                    figure_letter = figure_match.group(1)
+                    figure_desc = figure_descriptions.get(figure_letter, "")
+                    # Check if figure description mentions radiology modalities
+                    radiology_terms = ["radiograph", "x-ray", "xray", "ct", "mri", "ultrasound", 
+                                      "sonograph", "echocardiogram", "echo", "scan", "imaging",
+                                      "ecg", "electrocardiogram", "ekg"]
+                    is_radiology_from_vignette = any(term in figure_desc for term in radiology_terms)
+                    
+                    # Fallback: search for radiology terms near the Figure reference in original text
+                    if not is_radiology_from_vignette:
+                        figure_context_pattern = rf'.{{0,50}}[Ff]igure\s+{figure_letter.upper()}.{{0,20}}'
+                        context_match = re.search(figure_context_pattern, question_text, re.IGNORECASE)
+                        if context_match:
+                            context = context_match.group(0).lower()
+                            is_radiology_from_vignette = any(term in context for term in radiology_terms)
+                    
+                    if is_radiology_from_vignette:
+                        logger.info(f"[TOOL] tool_order_imaging - Figure {figure_letter.upper()} is '{figure_desc}' (radiology)")
+                
+                if is_radiology_format or is_radiology_from_vignette:
+                    radiology_images.append(f)
+            
+            logger.info(f"[TOOL] tool_order_imaging - Found {len(image_files)} total images, {len(radiology_images)} radiology images")
+        
+        # Also try to extract imaging findings from the clinical text
+        if patient_data:
+            imaging_info = _extract_imaging_from_text(question_text, modality, region)
+    else:
+        logger.warning(f"[TOOL] tool_order_imaging - No patient_id available, cannot check database")
+    
+    # If we found radiology images matching the request, report them
+    if radiology_images:
+        file_list = ", ".join([f.get("filename", "unknown") for f in radiology_images])
+        result = f"""IMAGING STUDY: {modality} {region}
+STATUS: RADIOLOGY IMAGES AVAILABLE
+
+The following radiology images are available for this patient:
+{file_list}
+
+Use the tool_analyze_image function to analyze specific image files if needed."""
+        logger.info(f"[TOOL] tool_order_imaging - Found radiology images in patient record")
+    elif imaging_info:
+        result = f"IMAGING STUDY: {modality} {region}\nFINDINGS: {imaging_info['findings']}\nIMPRESSION: {imaging_info['impression']}"
+        logger.info(f"[TOOL] tool_order_imaging - Found imaging data in patient record text")
+    else:
+        # No radiology imaging available - do NOT simulate
+        # But mention if there are other images (physical exam photos)
+        other_images_note = ""
+        if image_files:
+            file_list = ", ".join([f.get("filename", "unknown") for f in image_files])
+            other_images_note = f"""
+NOTE: The patient record contains clinical photos ({file_list}) which may be physical exam images (e.g., "Figure A"), not radiology studies. Review the clinical vignette to understand what these images show."""
+        
+        result = f"""IMAGING STUDY: {modality} {region}
+STATUS: NOT AVAILABLE
+
+This imaging study ({modality} {region}) has not been performed yet.
+In clinical practice, this study would need to be ordered.
+
+COST CONSIDERATION: {_get_imaging_cost_info(modality)}
+
+Before ordering, consider:
+- Is this imaging study critical for the diagnosis?
+- Are there less expensive alternatives that could provide the same information?
+- Has similar imaging been done recently that could be reviewed instead?{other_images_note}"""
+        logger.info(f"[TOOL] tool_order_imaging - Imaging not in patient record")
+    
+    # Store in state if tool_context available
     if tool_context:
         imaging_reports = tool_context.state.get('temp:imaging_reports', [])
-        imaging_reports.append(report.model_dump())
+        imaging_reports.append({
+            'modality': modality,
+            'region': region,
+            'result': result,
+            'available': bool(radiology_images) or imaging_info is not None,
+            'radiology_files': [f.get("filename") for f in radiology_images] if radiology_images else [],
+            'other_image_files': [f.get("filename") for f in image_files if f not in radiology_images]
+        })
         tool_context.state['temp:imaging_reports'] = imaging_reports
-        logger.debug(f"[TOOL] tool_order_imaging - Stored report in state. Total reports: {len(imaging_reports)}")
     
-    result = f"REPORT ID: {report.id}\nFINDINGS: {report.findings}\nIMPRESSION: {report.impression}"
-    logger.info(f"[TOOL] tool_order_imaging COMPLETED - Report ID: {report.id}")
     logger.info(f"[TOOL] ========== tool_order_imaging END ==========")
     return result
+
+
+def _extract_imaging_from_text(text: str, modality: str, region: str) -> Optional[Dict[str, str]]:
+    """
+    Extract imaging findings from clinical vignette text if an imaging study was ACTUALLY PERFORMED.
+    
+    This function looks for explicit mentions of imaging study RESULTS, not just
+    anatomical references. Physical exam findings (auscultation, palpation) are NOT imaging.
+    
+    Returns findings only if there's clear evidence an imaging study was done and reported.
+    """
+    if not text:
+        return None
+    
+    text_lower = text.lower()
+    modality_lower = modality.lower()
+    
+    # Keywords that indicate an actual imaging study was performed and reported
+    imaging_result_indicators = [
+        "ct shows", "ct revealed", "ct demonstrates", "ct scan shows",
+        "mri shows", "mri revealed", "mri demonstrates",
+        "x-ray shows", "xray shows", "radiograph shows", "chest film shows",
+        "ultrasound shows", "us shows", "sonography shows",
+        "imaging shows", "imaging revealed", "imaging demonstrates",
+        "ct of the", "mri of the", "x-ray of the", "ultrasound of the",
+        "ct findings", "mri findings", "x-ray findings",
+        "radiologic", "radiological", "radiology report",
+    ]
+    
+    # Check if there's evidence an imaging study was actually done
+    imaging_was_performed = False
+    for indicator in imaging_result_indicators:
+        if indicator in text_lower:
+            imaging_was_performed = True
+            break
+    
+    if not imaging_was_performed:
+        # No imaging study appears to have been done
+        return None
+    
+    # Now check if the specific modality was mentioned
+    imaging_keywords = {
+        "ct": ["ct ", "ct,", "ct.", "computed tomography", "cat scan"],
+        "mri": ["mri ", "mri,", "mri.", "magnetic resonance"],
+        "xray": ["x-ray", "xray", "radiograph", "chest film", "chest x"],
+        "us": ["ultrasound", "ultrasonography", "sonography"]
+    }
+    
+    modality_mentioned = False
+    for keyword in imaging_keywords.get(modality_lower, [modality_lower]):
+        if keyword in text_lower:
+            modality_mentioned = True
+            break
+    
+    if not modality_mentioned:
+        return None
+    
+    # Try to extract findings
+    findings_patterns = [
+        rf"(?:{modality_lower}|ct|mri|x-ray|ultrasound)\s+(?:of\s+\w+\s+)?(?:shows?|reveals?|demonstrates?)[:\s]+([^.]+)",
+        rf"(?:shows?|reveals?|demonstrates?)\s+([^.]+)(?:\s+on\s+{modality_lower})",
+        r"(?:imaging\s+)?(?:findings?|impression)[:\s]+([^.]+)",
+    ]
+    
+    for pattern in findings_patterns:
+        match = re.search(pattern, text_lower)
+        if match:
+            return {
+                "findings": match.group(1).strip().capitalize(),
+                "impression": "See clinical vignette for imaging study details."
+            }
+    
+    # If modality was mentioned with result indicators, but couldn't extract specific findings
+    return {
+        "findings": f"{modality.upper()} study was performed. Review clinical vignette for specific findings.",
+        "impression": "Imaging study referenced in clinical presentation."
+    }
+
+
+def _get_imaging_cost_info(modality: str) -> str:
+    """Return approximate cost tier for imaging modalities."""
+    cost_tiers = {
+        "MRI": "HIGH COST ($1,000-$3,000+) - Reserve for soft tissue, neurological, or musculoskeletal indications",
+        "CT": "MODERATE-HIGH COST ($500-$1,500) - Consider radiation exposure",
+        "US": "LOW-MODERATE COST ($200-$500) - Good first-line for abdominal, pelvic, vascular",
+        "XRAY": "LOW COST ($100-$300) - Appropriate for bones, chest screening"
+    }
+    return cost_tiers.get(modality.upper(), "COST VARIES - Confirm with radiology")
 
 def tool_analyze_image(path: str, slice_index: Optional[int] = None, operations: Optional[List[str]] = None, bins: int = 64, tool_context: Optional[ToolContext] = None):
     """

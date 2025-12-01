@@ -18,10 +18,17 @@ def _connect_db():
     return conn
 
 def _create_tables():
-    """Creates the necessary tables if they don't exist."""
+    """Creates the necessary tables if they don't exist.
+    
+    Schema matches evaluation_setup.py for MedXpertQA compatibility:
+    - patient_data: patient_id, question, options, label, medical_task, body_system, question_type
+    - patient_files: patient_id, type, data, filename, mime_type, created_at
+    - patient_lab_results: patient_id, lab_results_string
+    """
     conn = _connect_db()
     cursor = conn.cursor()
 
+    # Main patient data table - MedXpertQA schema
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_data (
             patient_id TEXT PRIMARY KEY,
@@ -30,6 +37,7 @@ def _create_tables():
         )
     """)
 
+    # Patient files table for images and other binary data
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_files (
             patient_id TEXT,
@@ -42,6 +50,7 @@ def _create_tables():
         )
     """)
 
+    # Separate table for lab results
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_lab_results (
             patient_id TEXT,
@@ -58,31 +67,24 @@ _create_tables()
 def get_patient_data_from_db(patient_id: str) -> Optional[Dict[str, Any]]:
     """Retrieves patient data from the database.
     
-    Returns data that may include:
-    - description: The clinical case description/vignette
-    - metadata: Additional structured data (JSON)
+    Returns data matching MedXpertQA schema:
+    - question: The clinical case description/vignette
+    - options: Answer choices as JSON dict
+    - label: Correct answer letter
+    - medical_task: Task category
+    - body_system: Body system
+    - question_type: Question type
     - lab_results_string: Lab results if stored separately
     """
     conn = _connect_db()
     cursor = conn.cursor()
 
-    # First try the actual schema (description, metadata)
-    try:
-        cursor.execute("""
-            SELECT patient_id, description, metadata
-            FROM patient_data 
-            WHERE patient_id = ?
-        """, (patient_id,))
-        patient_data = cursor.fetchone()
-    except sqlite3.OperationalError:
-        # Fall back to legacy schema
-        cursor.execute("""
-            SELECT 
-                patient_id, question, options, label, medical_task, body_system, question_type
-            FROM patient_data 
-            WHERE patient_id = ?
-        """, (patient_id,))
-        patient_data = cursor.fetchone()
+    cursor.execute("""
+        SELECT patient_id, question, options, label, medical_task, body_system, question_type
+        FROM patient_data 
+        WHERE patient_id = ?
+    """, (patient_id,))
+    patient_data = cursor.fetchone()
 
     # Select lab results
     cursor.execute("SELECT lab_results_string FROM patient_lab_results WHERE patient_id = ?", (patient_id,))
@@ -93,15 +95,8 @@ def get_patient_data_from_db(patient_id: str) -> Optional[Dict[str, Any]]:
     if patient_data:
         result = dict(patient_data)
         
-        # Parse metadata from JSON if present
-        if 'metadata' in result and result['metadata']:
-            try:
-                result['metadata'] = json.loads(result['metadata'])
-            except (json.JSONDecodeError, TypeError):
-                pass
-        
-        # Parse options from JSON string (legacy schema)
-        if 'options' in result and result['options']:
+        # Parse options from JSON string
+        if result.get('options'):
             try:
                 result['options'] = json.loads(result['options'])
             except (json.JSONDecodeError, TypeError):
@@ -168,16 +163,20 @@ def store_patient_data_in_db(
     description: str,
     metadata: Optional[Dict] = None,
 ) -> None:
-    """Stores or updates patient data in the database using the actual schema.
+    """Stores or updates patient data in the database using MedXpertQA schema.
     
     Args:
         patient_id: Unique patient identifier
-        description: The clinical case description/vignette (includes lab results in text)
-        metadata: Optional additional structured data
+        question: The clinical case description/vignette (includes question text)
+        options: Answer choices as dict (e.g., {"A": "option1", "B": "option2", ...})
+        label: Correct answer letter (e.g., "D")
+        medical_task: Task category
+        body_system: Body system
+        question_type: Question type
     """
     conn = _connect_db()
     cursor = conn.cursor()
-    metadata_json = json.dumps(metadata) if metadata else None
+    options_json = json.dumps(options) if options else None
     
     cursor.execute(
         """
