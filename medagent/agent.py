@@ -14,6 +14,7 @@ from .sub_agents.evidence.agent import evidence_agent
 from .sub_agents.imaging.agent import imaging_agent
 from .sub_agents.research.agent import research_agent
 from .tools import (
+    load_patient_case,
     store_patient_data,
     store_patient_data_multiple,
     get_patient_summary,
@@ -35,6 +36,8 @@ root_agent = Agent(
     # NOTE: The automatic location context injection below will not work properly if deployed, this is just for local testing purposes.
     instruction=prompt.MEDICAL_ORCHESTRATOR_INSTRUCTION + f"\n\n LOCATION CONTEXT: The current user is located in {get_location_from_ip()}.",
     tools=[
+        # Patient case loading (MUST be called first when working with database cases)
+        load_patient_case,
         # Patient data management tools
         store_patient_data,
         store_patient_data_multiple,

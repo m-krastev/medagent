@@ -18,10 +18,17 @@ def _connect_db():
     return conn
 
 def _create_tables():
-    """Creates the necessary tables if they don't exist."""
+    """Creates the necessary tables if they don't exist.
+    
+    Schema matches evaluation_setup.py for MedXpertQA compatibility:
+    - patient_data: patient_id, question, options, label, medical_task, body_system, question_type
+    - patient_files: patient_id, type, data, filename, mime_type, created_at
+    - patient_lab_results: patient_id, lab_results_string
+    """
     conn = _connect_db()
     cursor = conn.cursor()
 
+    # Main patient data table - MedXpertQA schema
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_data (
             patient_id TEXT PRIMARY KEY,
@@ -34,6 +41,7 @@ def _create_tables():
         )
     """)
 
+    # Patient files table for images and other binary data
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_files (
             patient_id TEXT,
@@ -46,6 +54,7 @@ def _create_tables():
         )
     """)
 
+    # Separate table for lab results
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_lab_results (
             patient_id TEXT,
@@ -60,14 +69,22 @@ def _create_tables():
 _create_tables()
 
 def get_patient_data_from_db(patient_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieves patient data, including question, options, and metadata fields, from the database."""
+    """Retrieves patient data from the database.
+    
+    Returns data matching MedXpertQA schema:
+    - question: The clinical case description/vignette
+    - options: Answer choices as JSON dict
+    - label: Correct answer letter
+    - medical_task: Task category
+    - body_system: Body system
+    - question_type: Question type
+    - lab_results_string: Lab results if stored separately
+    """
     conn = _connect_db()
     cursor = conn.cursor()
 
-    # Select all relevant columns from patient_data
     cursor.execute("""
-        SELECT 
-            patient_id, question, options, label, medical_task, body_system, question_type
+        SELECT patient_id, question, options, label, medical_task, body_system, question_type
         FROM patient_data 
         WHERE patient_id = ?
     """, (patient_id,))
@@ -83,10 +100,11 @@ def get_patient_data_from_db(patient_id: str) -> Optional[Dict[str, Any]]:
         result = dict(patient_data)
         
         # Parse options from JSON string
-        if result['options']:
-            result['options'] = json.loads(result['options'])
-        else:
-            result['options'] = None
+        if result.get('options'):
+            try:
+                result['options'] = json.loads(result['options'])
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         # Add lab results
         if lab_results:
@@ -153,14 +171,21 @@ def store_patient_data_in_db(
     body_system: Optional[str] = None,
     question_type: Optional[str] = None,
 ) -> None:
-    """Stores or updates patient data in the database."""
+    """Stores or updates patient data in the database using MedXpertQA schema.
+    
+    Args:
+        patient_id: Unique patient identifier
+        question: The clinical case description/vignette (includes question text)
+        options: Answer choices as dict (e.g., {"A": "option1", "B": "option2", ...})
+        label: Correct answer letter (e.g., "D")
+        medical_task: Task category
+        body_system: Body system
+        question_type: Question type
+    """
     conn = _connect_db()
     cursor = conn.cursor()
     options_json = json.dumps(options) if options else None
     
-    # Ensure patient_id exists (for foreign key constraints elsewhere)
-    cursor.execute("INSERT OR IGNORE INTO patient_data (patient_id) VALUES (?)", (patient_id,))
-
     cursor.execute(
         """
         INSERT OR REPLACE INTO patient_data (

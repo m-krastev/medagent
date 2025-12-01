@@ -104,5 +104,16 @@ def tool_consult_guidelines(query: str) -> str:
     Returns:
         str: The retrieved guideline or literature summary.
     """
+    logger.info(f"[TOOL] ========== tool_consult_guidelines CALLED ==========")
+    logger.info(f"[TOOL] tool_consult_guidelines - query: '{query}'")
+    
     engine = get_rag_engine()
-    return engine.search(query)
+    result = engine.search(query)
+    
+    # Ensure we always return a non-empty string
+    if not result or result.strip() == "":
+        result = f"No specific guidelines found for query: '{query}'. Please provide general medical knowledge based on the clinical scenario."
+    
+    logger.info(f"[TOOL] tool_consult_guidelines - result length: {len(result)}")
+    logger.info(f"[TOOL] ========== tool_consult_guidelines END ==========")
+    return result
