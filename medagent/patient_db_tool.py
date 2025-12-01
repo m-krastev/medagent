@@ -25,12 +25,8 @@ def _create_tables():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patient_data (
             patient_id TEXT PRIMARY KEY,
-            question TEXT,
-            options TEXT,
-            label TEXT,
-            medical_task TEXT,
-            body_system TEXT,
-            question_type TEXT
+            description TEXT,
+            metadata TEXT
         )
     """)
 
@@ -60,18 +56,33 @@ def _create_tables():
 _create_tables()
 
 def get_patient_data_from_db(patient_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieves patient data, including question, options, and metadata fields, from the database."""
+    """Retrieves patient data from the database.
+    
+    Returns data that may include:
+    - description: The clinical case description/vignette
+    - metadata: Additional structured data (JSON)
+    - lab_results_string: Lab results if stored separately
+    """
     conn = _connect_db()
     cursor = conn.cursor()
 
-    # Select all relevant columns from patient_data
-    cursor.execute("""
-        SELECT 
-            patient_id, question, options, label, medical_task, body_system, question_type
-        FROM patient_data 
-        WHERE patient_id = ?
-    """, (patient_id,))
-    patient_data = cursor.fetchone()
+    # First try the actual schema (description, metadata)
+    try:
+        cursor.execute("""
+            SELECT patient_id, description, metadata
+            FROM patient_data 
+            WHERE patient_id = ?
+        """, (patient_id,))
+        patient_data = cursor.fetchone()
+    except sqlite3.OperationalError:
+        # Fall back to legacy schema
+        cursor.execute("""
+            SELECT 
+                patient_id, question, options, label, medical_task, body_system, question_type
+            FROM patient_data 
+            WHERE patient_id = ?
+        """, (patient_id,))
+        patient_data = cursor.fetchone()
 
     # Select lab results
     cursor.execute("SELECT lab_results_string FROM patient_lab_results WHERE patient_id = ?", (patient_id,))
@@ -82,11 +93,19 @@ def get_patient_data_from_db(patient_id: str) -> Optional[Dict[str, Any]]:
     if patient_data:
         result = dict(patient_data)
         
-        # Parse options from JSON string
-        if result['options']:
-            result['options'] = json.loads(result['options'])
-        else:
-            result['options'] = None
+        # Parse metadata from JSON if present
+        if 'metadata' in result and result['metadata']:
+            try:
+                result['metadata'] = json.loads(result['metadata'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        # Parse options from JSON string (legacy schema)
+        if 'options' in result and result['options']:
+            try:
+                result['options'] = json.loads(result['options'])
+            except (json.JSONDecodeError, TypeError):
+                pass
 
         # Add lab results
         if lab_results:
@@ -146,28 +165,27 @@ def get_patient_file_from_db(patient_id: str, file_type: Optional[str] = None, m
 
 def store_patient_data_in_db(
     patient_id: str,
-    question: str,
-    options: Optional[Dict] = None,
-    label: Optional[str] = None,
-    medical_task: Optional[str] = None,
-    body_system: Optional[str] = None,
-    question_type: Optional[str] = None,
+    description: str,
+    metadata: Optional[Dict] = None,
 ) -> None:
-    """Stores or updates patient data in the database."""
+    """Stores or updates patient data in the database using the actual schema.
+    
+    Args:
+        patient_id: Unique patient identifier
+        description: The clinical case description/vignette (includes lab results in text)
+        metadata: Optional additional structured data
+    """
     conn = _connect_db()
     cursor = conn.cursor()
-    options_json = json.dumps(options) if options else None
+    metadata_json = json.dumps(metadata) if metadata else None
     
-    # Ensure patient_id exists (for foreign key constraints elsewhere)
-    cursor.execute("INSERT OR IGNORE INTO patient_data (patient_id) VALUES (?)", (patient_id,))
-
     cursor.execute(
         """
         INSERT OR REPLACE INTO patient_data (
-            patient_id, question, options, label, medical_task, body_system, question_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            patient_id, description, metadata
+        ) VALUES (?, ?, ?)
         """,
-        (patient_id, question, options_json, label, medical_task, body_system, question_type)
+        (patient_id, description, metadata_json)
     )
     conn.commit()
     conn.close()

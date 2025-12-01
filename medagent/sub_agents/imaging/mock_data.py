@@ -12,15 +12,35 @@ LAB_REFERENCE_RANGES = {
     "LACTATE": {"low": 0.5, "high": 2.2, "unit": "mmol/L"},
     "CRP": {"low": 0.0, "high": 10.0, "unit": "mg/L"},
     "TSH": {"low": 0.4, "high": 4.0, "unit": "mIU/L"},
+    # Hepatobiliary labs
+    "BILIRUBIN": {"low": 0.3, "high": 1.0, "unit": "mg/dL"},
+    "ALT": {"low": 0, "high": 35, "unit": "U/L"},
+    "AST": {"low": 0, "high": 35, "unit": "U/L"},
+    "ALP": {"low": 30, "high": 120, "unit": "U/L"},
+    "GGT": {"low": 8, "high": 61, "unit": "U/L"},
+    "LIPASE": {"low": 0, "high": 160, "unit": "U/L"},
+    "AMYLASE": {"low": 25, "high": 125, "unit": "U/L"},
+    # Additional common labs
+    "BNP": {"low": 0, "high": 100, "unit": "pg/mL"},
+    "PROCALCITONIN": {"low": 0, "high": 0.1, "unit": "ng/mL"},
 }
 
 # Disease Profiles for Simulation
 DISEASE_PROFILES = {
-    "infection": {"WBC": "HIGH", "CRP": "HIGH", "LACTATE": "HIGH"},
-    "sepsis": {"WBC": "CRITICAL", "CRP": "HIGH", "LACTATE": "CRITICAL", "BP": "LOW"},
+    "infection": {"WBC": "HIGH", "CRP": "HIGH", "LACTATE": "HIGH", "PROCALCITONIN": "HIGH"},
+    "sepsis": {"WBC": "CRITICAL", "CRP": "HIGH", "LACTATE": "CRITICAL", "PROCALCITONIN": "CRITICAL"},
     "anemia": {"HGB": "LOW"},
     "kidney_failure": {"CREATININE": "CRITICAL", "K": "HIGH"},
     "heart_attack": {"TROPONIN": "CRITICAL"},
     "pe": {"D-DIMER": "HIGH"},
     "diabetes": {"GLUCOSE": "HIGH"},
+    # Hepatobiliary diseases
+    "cholecystitis": {"WBC": "HIGH", "CRP": "HIGH", "BILIRUBIN": "HIGH", "ALP": "HIGH", "GGT": "HIGH"},
+    "cholangitis": {"WBC": "CRITICAL", "BILIRUBIN": "HIGH", "ALP": "HIGH", "ALT": "HIGH", "AST": "HIGH", "GGT": "HIGH"},
+    "choledocholithiasis": {"BILIRUBIN": "HIGH", "ALP": "HIGH", "GGT": "HIGH"},
+    "pancreatitis": {"LIPASE": "CRITICAL", "AMYLASE": "CRITICAL", "WBC": "HIGH", "CRP": "HIGH"},
+    "hepatitis": {"ALT": "CRITICAL", "AST": "CRITICAL", "BILIRUBIN": "HIGH"},
+    "liver_abscess": {"WBC": "CRITICAL", "ALP": "HIGH", "CRP": "HIGH", "PROCALCITONIN": "HIGH"},
+    # Pyelonephritis
+    "pyelonephritis": {"WBC": "HIGH", "CRP": "HIGH", "CREATININE": "HIGH", "PROCALCITONIN": "HIGH"},
 }

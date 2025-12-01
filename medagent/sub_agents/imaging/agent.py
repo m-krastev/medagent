@@ -41,18 +41,30 @@ async def analyze_patient_image(
     Returns:
         A JSON string of the analysis results or an error message.
     """
+    logger.info(f"[TOOL] ========== analyze_patient_image CALLED ==========")
+    logger.info(f"[TOOL] analyze_patient_image - patient_id: '{patient_id}'")
+    logger.info(f"[TOOL] analyze_patient_image - file_type: '{file_type}'")
+    logger.info(f"[TOOL] analyze_patient_image - slice_index: {slice_index}")
+    logger.info(f"[TOOL] analyze_patient_image - operations: {operations}")
+    logger.info(f"[TOOL] analyze_patient_image - bins: {bins}")
+    
     # Store patient_id in state so get_patient_raw_file_and_path can access it
     tool_context.state["patient_id"] = patient_id
+    logger.debug(f"[TOOL] analyze_patient_image - Stored patient_id in state")
     
     # 1. Retrieve the raw file and get its temporary path
+    logger.info(f"[TOOL] analyze_patient_image - Retrieving raw file from database...")
     temp_file_path: str = await get_patient_raw_file_and_path(file_type, tool_context)
-    logging.info(f"Temporary file path for analysis: {temp_file_path}")
+    logger.info(f"[TOOL] analyze_patient_image - Temporary file path: {temp_file_path}")
 
     if temp_file_path.startswith("Error:"):
+        logger.error(f"[TOOL] analyze_patient_image - File retrieval FAILED: {temp_file_path}")
+        logger.info(f"[TOOL] ========== analyze_patient_image END (ERROR) ==========")
         return temp_file_path # Return error if file retrieval failed
 
     # 2. Analyze the image using the imaging_tools's tool_analyze_image
     try:
+        logger.info(f"[TOOL] analyze_patient_image - Starting image analysis...")
         analysis_results = tools.tool_analyze_image(
             path=temp_file_path,
             slice_index=slice_index,
@@ -62,9 +74,15 @@ async def analyze_patient_image(
         )
         # Ensure analysis_results is a non-empty dictionary before JSON serialization
         if not analysis_results:
+            logger.warning(f"[TOOL] analyze_patient_image - Analysis returned empty results")
             analysis_results = {"status": "warning", "message": "Image analysis returned no results or an empty dictionary."}
+        
+        logger.info(f"[TOOL] analyze_patient_image - Analysis successful. Keys: {list(analysis_results.keys()) if isinstance(analysis_results, dict) else 'N/A'}")
+        logger.info(f"[TOOL] ========== analyze_patient_image END (SUCCESS) ==========")
         return json.dumps(analysis_results, indent=2)
     except Exception as e:
+        logger.error(f"[TOOL] analyze_patient_image - Analysis FAILED with error: {e}")
+        logger.info(f"[TOOL] ========== analyze_patient_image END (ERROR) ==========")
         return f"Error analyzing image at {temp_file_path}: {e}"
     finally:
         # Cleanup is handled by the ADK framework for temp_files_to_delete in tool_context state
@@ -74,10 +92,12 @@ async def analyze_patient_image(
 imaging_agent = Agent(
     model=settings.MODEL_FAST,
     name="imaging_agent",
-    description="Orders and interprets radiology studies (CT, MRI, X-ray, Ultrasound). Generates structured reports with findings and impressions, and can analyze raw image data.",
+    description="Orders and interprets radiology studies (CT, MRI, X-ray, Ultrasound). Generates structured reports with findings and impressions, can analyze raw image data, and order correlated lab tests.",
     instruction=prompt.IMAGING_INSTRUCTION,
     tools=[
         tools.tool_order_imaging,
-        analyze_patient_image, # Add the new image analysis tool
+        tools.tool_order_labs,
+        tools.tool_extract_slice,
+        analyze_patient_image,
     ]
 )

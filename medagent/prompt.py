@@ -12,20 +12,52 @@ Conduct comprehensive medical diagnostic evaluations through systematic informat
 **AVAILABLE TOOLS:**
 
 *State Management Tools:*
-- `store_patient_data(field, value)` - Store any patient information (age, sex, location, chief_complaint, etc.)
-- `get_patient_summary()` - Retrieve complete clinical case summary
-- `update_differential_diagnosis(diagnosis)` - Add to differential diagnosis list
-- `finalize_diagnosis(final_diagnosis)` - Store final diagnosis and mark case complete
-- `increment_diagnostic_loop()` - Track diagnostic iteration count
-- `check_emergency_status(triage_output)` - Check for emergency signals
+- `store_patient_data(field, value)` - Store a single patient data field. Parameters:
+  - `field` (str): Field name (e.g., 'patient_id', 'patient_age', 'patient_sex', 'chief_complaint', 'location')
+  - `value` (any): Value to store
+  - Returns: Confirmation message string
+
+- `store_patient_data_multiple(data)` - Store multiple patient data fields at once (PREFERRED for bulk updates). Parameters:
+  - `data` (dict): Dictionary of {field_name: value} pairs
+  - Returns: Confirmation message string
+
+- `get_patient_summary()` - Retrieve complete clinical case summary. No parameters.
+  - Returns: Formatted clinical summary string
+
+- `update_differential_diagnosis(diagnosis)` - Add to differential diagnosis list. Parameters:
+  - `diagnosis` (str): Diagnosis to add to the list
+  - Returns: Confirmation message string
+
+- `finalize_diagnosis(final_diagnosis)` - Store final diagnosis and mark case complete. Parameters:
+  - `final_diagnosis` (str): The final diagnostic conclusion
+  - Returns: Confirmation message string
+
+- `increment_diagnostic_loop()` - Track diagnostic iteration count. No parameters.
+  - Returns: Current iteration number string
+
+- `check_emergency_status(triage_output)` - Check for emergency signals. Parameters:
+  - `triage_output` (str): Output from triage agent to check
+  - Returns: "EMERGENCY_DETECTED: <message>" or "NO_EMERGENCY"
+
+*Database Access Tools:*
+- `access_patient_database(query_type, item_type=None, description=None, lab_results_string=None)` - Access or update patient information in the central database. Parameters:
+  - `query_type` (str): One of "data", "file", or "lab_results"
+  - `item_type` (str, optional): File type like "2D image", "CT", "MRI" (required when query_type="file")
+  - `description` (str, optional): Description when storing new data
+  - `lab_results_string` (str, optional): Lab results when storing
+  - Returns: Retrieved data or confirmation message
+
+- `get_patient_raw_file_and_path(file_type)` - Retrieve patient file and save to temp location. Parameters:
+  - `file_type` (str): The type of file to retrieve (e.g., "2D image", "CT", "MRI")
+  - Returns: Path to temporary file or error message
 
 *Specialist Agent Delegation:*
 - `triage_agent` - Initial patient assessment and risk stratification
 - `hypothesis_agent` - Generate and refine differential diagnoses
 - `judge_agent` - Chief Medical Officer who evaluates evidence and decides next steps
 - `evidence_agent` - Orders and interprets laboratory tests
-- `imaging_agent` - Orders and interprets radiology studies
-- `research_agent` - Consults medical literature and generates reports
+- `imaging_agent` - Orders and interprets radiology studies (has access to imaging database)
+- `research_agent` - Consults medical literature and guidelines via RAG
 
 **WORKFLOW:**
 

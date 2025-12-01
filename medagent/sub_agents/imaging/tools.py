@@ -1,10 +1,19 @@
 """
 Imaging Agent Tools - Radiology ordering and simulation
+
+This module provides tools for the imaging agent to:
+1. Order and retrieve lab results (from database or simulation)
+2. Order and retrieve imaging studies (from database or simulation)
+3. Analyze medical images (feature extraction)
+
+Priority: Database > Simulation (fallback)
 """
 
 import logging
+import re
+import sys
 from google.adk.tools.tool_context import ToolContext
-from typing import Optional, List, Literal # Import Literal
+from typing import Optional, List, Literal, Dict, Any
 
 import random
 import numpy as np
@@ -17,9 +26,25 @@ from skimage.transform import resize
 from .models import LabResult, ImagingReport
 from .mock_data import LAB_REFERENCE_RANGES, DISEASE_PROFILES
 
-# Configure logging for imaging tools
+# Import database functions for real data access
+from ...patient_db_tool import (
+    get_patient_data_from_db,
+    get_patient_file_from_db,
+)
+
+# Configure logging for imaging tools - ensure output to console
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+# Add console handler if not already present
+if not logger.handlers:
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(name)s] %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    # Prevent propagation to avoid duplicate logs
+    logger.propagate = False
 
 
 # =========================
@@ -143,12 +168,45 @@ class ImagingSimulator:
                 logger.debug(f"[ImagingSimulator] Pattern matched: bleed")
 
         # Abdomen patterns
-        elif "abdomen" in reg:
-            logger.debug(f"[ImagingSimulator] Region matched: abdomen")
+        elif "abdomen" in reg or "ruq" in reg or "right upper quadrant" in reg or "biliary" in reg or "gallbladder" in reg or "liver" in reg:
+            logger.debug(f"[ImagingSimulator] Region matched: abdomen/biliary")
             if "appendicitis" in ctx:
                 findings = "Dilated appendix (12mm) with periappendiceal fat stranding."
                 impression = "Acute Appendicitis."
                 logger.debug(f"[ImagingSimulator] Pattern matched: appendicitis")
+            elif "cholecystitis" in ctx:
+                if "us" in modality.lower() or "ultrasound" in modality.lower():
+                    findings = "Gallbladder wall thickening (5mm), pericholecystic fluid, positive sonographic Murphy sign. Multiple gallstones identified."
+                    impression = "Acute Cholecystitis."
+                else:
+                    findings = "Distended gallbladder with wall thickening and pericholecystic inflammatory changes. Gallstones present."
+                    impression = "Acute Cholecystitis."
+                logger.debug(f"[ImagingSimulator] Pattern matched: cholecystitis")
+            elif "cholangitis" in ctx or "biliary" in ctx:
+                findings = "Dilated common bile duct (12mm) with intrahepatic biliary dilatation. Possible distal CBD stone."
+                impression = "Biliary obstruction with findings concerning for Cholangitis."
+                logger.debug(f"[ImagingSimulator] Pattern matched: cholangitis/biliary")
+            elif "choledocholithiasis" in ctx:
+                findings = "Common bile duct dilation (10mm) with echogenic focus in the distal CBD consistent with choledocholithiasis."
+                impression = "Choledocholithiasis with biliary obstruction."
+                logger.debug(f"[ImagingSimulator] Pattern matched: choledocholithiasis")
+            elif "pancreatitis" in ctx:
+                findings = "Pancreatic enlargement with peripancreatic fat stranding and fluid collections."
+                impression = "Acute Pancreatitis."
+                logger.debug(f"[ImagingSimulator] Pattern matched: pancreatitis")
+            elif "abscess" in ctx or "liver abscess" in ctx:
+                findings = "Heterogeneous hepatic lesion with peripheral enhancement, measuring 5cm in the right lobe. Central hypodensity with possible gas locules."
+                impression = "Hepatic abscess."
+                logger.debug(f"[ImagingSimulator] Pattern matched: liver abscess")
+            elif "pyelonephritis" in ctx or "kidney infection" in ctx:
+                findings = "Right kidney shows focal areas of decreased enhancement with perinephric fat stranding."
+                impression = "Acute Pyelonephritis, right kidney."
+                logger.debug(f"[ImagingSimulator] Pattern matched: pyelonephritis")
+            elif "sepsis" in ctx and ("source" in ctx or "focus" in ctx):
+                # Generic abdominal sepsis workup - look for common sources
+                findings = "Hepatic lesion with peripheral rim enhancement in the right lobe, concerning for abscess. No biliary dilatation. Kidneys show no hydronephrosis."
+                impression = "Suspected hepatic abscess - recommend clinical correlation and possible drainage."
+                logger.debug(f"[ImagingSimulator] Pattern matched: sepsis source")
 
         report = ImagingReport(
             modality=modality, region=region, findings=findings, impression=impression
@@ -303,26 +361,218 @@ img_feat_extractor = ImageFeatureExtractor()
 logger.info("[ImagingTools] Singletons initialized: LabSimulator, ImagingSimulator, ImageFeatureExtractor")
 
 
-from typing import Optional, List # Import Optional and List for type hints
+# =========================
+# DATABASE HELPERS
+# =========================
+
+def _parse_lab_results_from_db(lab_results_string: str, test_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Parse lab results from the database string format to find a specific test.
+    
+    The database stores lab results as a formatted string like:
+    | Leukocyte count (per mm3) | 14,200 | 4500–11,000 |
+    | Creatinine (mg/dL) | 2.0 | 0.6–1.1 |
+    
+    Args:
+        lab_results_string: The raw lab results string from database
+        test_name: The test name to search for
+        
+    Returns:
+        Dictionary with parsed lab result or None if not found
+    """
+    if not lab_results_string:
+        return None
+    
+    test_key = test_name.upper()
+    
+    # Common lab name mappings
+    lab_name_mappings = {
+        "WBC": ["leukocyte", "wbc", "white blood cell", "white cell"],
+        "HGB": ["hemoglobin", "hgb", "hb"],
+        "PLT": ["platelet", "plt"],
+        "CREATININE": ["creatinine", "cr"],
+        "BILIRUBIN": ["bilirubin", "bili", "total bilirubin"],
+        "ALP": ["alkaline phosphatase", "alp", "alk phos"],
+        "AST": ["aspartate aminotransferase", "ast", "sgot"],
+        "ALT": ["alanine aminotransferase", "alt", "sgpt"],
+        "CRP": ["c-reactive protein", "crp"],
+        "TROPONIN": ["troponin", "trop"],
+        "D-DIMER": ["d-dimer", "d dimer"],
+        "LIPASE": ["lipase"],
+        "AMYLASE": ["amylase"],
+        "GGT": ["gamma-glutamyl", "ggt", "gamma gt"],
+        "BNP": ["bnp", "brain natriuretic"],
+        "LACTATE": ["lactate", "lactic acid"],
+        "GLUCOSE": ["glucose", "blood sugar"],
+        "NA": ["sodium", "na+"],
+        "K": ["potassium", "k+"],
+        "HCT": ["hematocrit", "hct"],
+    }
+    
+    # Get possible names for this test
+    possible_names = lab_name_mappings.get(test_key, [test_key.lower()])
+    
+    # Parse each line looking for matching test
+    for line in lab_results_string.split('\n'):
+        line_lower = line.lower()
+        
+        for name in possible_names:
+            if name in line_lower:
+                # Try to extract value using regex patterns
+                # Pattern 1: | Name | Value | Reference |
+                pipe_match = re.search(r'\|\s*[^|]+\s*\|\s*([0-9.,]+)\s*\|\s*([0-9.,\-–]+)\s*\|?', line)
+                if pipe_match:
+                    try:
+                        value = float(pipe_match.group(1).replace(',', ''))
+                        ref_range = pipe_match.group(2).replace('–', '-')
+                        
+                        # Parse reference range to determine flag
+                        ref_parts = ref_range.split('-')
+                        flag = "normal"
+                        if len(ref_parts) == 2:
+                            ref_low = float(ref_parts[0].replace(',', ''))
+                            ref_high = float(ref_parts[1].replace(',', ''))
+                            if value > ref_high:
+                                flag = "HIGH"
+                            elif value < ref_low:
+                                flag = "LOW"
+                            else:
+                                flag = "NORMAL"
+                        
+                        # Extract unit from the name part if present
+                        unit_match = re.search(r'\(([^)]+)\)', line)
+                        unit = unit_match.group(1) if unit_match else ""
+                        
+                        return {
+                            "test_name": test_key,
+                            "value": value,
+                            "unit": unit,
+                            "reference_range": ref_range,
+                            "flag": flag,
+                            "source": "database"
+                        }
+                    except (ValueError, IndexError):
+                        continue
+    
+    return None
+
 
 # =========================
 # TOOL WRAPPERS
 # =========================
 
 
-def tool_order_labs(test_name: str, clinical_context: str = "") -> str:
-    logger.info(f"[TOOL] tool_order_labs CALLED - test_name: '{test_name}', clinical_context: '{clinical_context[:50] if clinical_context else 'None'}...'")
-    result = lab_sim.order_test(test_name, clinical_context)
-    logger.info(f"[TOOL] tool_order_labs COMPLETED - result: {result}")
-    return str(result)
+def tool_order_labs(test_name: str, clinical_context: str = "", tool_context: Optional[ToolContext] = None) -> dict:
+    """
+    Orders a laboratory test. First checks the patient database for existing results,
+    then falls back to simulation if not found.
+    
+    Args:
+        test_name: Name of the lab test to order (e.g., "WBC", "CRP", "Troponin").
+        clinical_context: The suspected condition or clinical reason for the test.
+        tool_context: ADK tool context for accessing session state.
+    
+    Returns:
+        Dictionary containing test results with status, value, unit, reference range, and flag.
+    """
+    logger.info(f"[TOOL] ========== tool_order_labs CALLED ==========")
+    logger.info(f"[TOOL] tool_order_labs - test_name: '{test_name}'")
+    logger.info(f"[TOOL] tool_order_labs - clinical_context: '{clinical_context[:50] if clinical_context else 'None'}...'")
+    logger.info(f"[TOOL] tool_order_labs - tool_context available: {tool_context is not None}")
+    
+    # PRIORITY 1: Try to get from database
+    db_result = None
+    if tool_context:
+        patient_id = tool_context.state.get("patient_id")
+        if patient_id:
+            logger.info(f"[TOOL] tool_order_labs - Checking database for patient {patient_id}")
+            patient_data = get_patient_data_from_db(patient_id)
+            if patient_data:
+                lab_results_string = patient_data.get("lab_results_string") or patient_data.get("description", "")
+                logger.debug(f"[TOOL] tool_order_labs - Found patient data, parsing lab results...")
+                db_result = _parse_lab_results_from_db(lab_results_string, test_name)
+                if db_result:
+                    logger.info(f"[TOOL] tool_order_labs - Found {test_name} in database: {db_result['value']} {db_result['unit']}")
+    
+    if db_result:
+        response = {
+            "status": "success",
+            "test_name": db_result["test_name"],
+            "value": db_result["value"],
+            "unit": db_result["unit"],
+            "reference_range": db_result["reference_range"],
+            "flag": db_result["flag"],
+            "source": "patient_record"
+        }
+    else:
+        # PRIORITY 2: Fall back to simulation
+        logger.info(f"[TOOL] tool_order_labs - No database result, using simulation")
+        result = lab_sim.order_test(test_name, clinical_context)
+        response = {
+            "status": "success",
+            "test_name": result.test_name,
+            "value": result.value,
+            "unit": result.unit,
+            "reference_range": result.reference_range,
+            "flag": result.flag,
+            "source": "simulation"
+        }
+    
+    # Store result in state if tool_context available
+    if tool_context:
+        lab_results = tool_context.state.get('temp:lab_results', [])
+        lab_results.append(response)
+        tool_context.state['temp:lab_results'] = lab_results
+        logger.debug(f"[TOOL] tool_order_labs - Stored result in state. Total lab results: {len(lab_results)}")
+    
+    logger.info(f"[TOOL] tool_order_labs COMPLETED - {response['test_name']}: {response['value']} {response['unit']} ({response['flag']}) [source: {response.get('source', 'unknown')}]")
+    logger.info(f"[TOOL] ========== tool_order_labs END ==========")
+    return response
 
 
-def tool_extract_slice(path: str, slice_index: Optional[int] = None):
-    logger.info(f"[TOOL] tool_extract_slice CALLED - path: '{path}', slice_index: {slice_index}")
-    img = img_feat_extractor.load_image(path)
-    slice_img = img_feat_extractor.extract_slice(img, slice_index)
-    logger.info(f"[TOOL] tool_extract_slice COMPLETED - slice shape: {slice_img.shape}")
-    return slice_img.tolist()
+def tool_extract_slice(path: str, slice_index: Optional[int] = None, tool_context: Optional[ToolContext] = None) -> dict:
+    """
+    Extracts a 2D slice from a 3D medical image volume (CT, MRI).
+    
+    Args:
+        path: File path to the medical image (DICOM, NIfTI, or NumPy format).
+        slice_index: Specific slice index to extract. If None, extracts the middle slice.
+        tool_context: ADK tool context for accessing session state.
+    
+    Returns:
+        Dictionary containing status, slice shape, and the extracted slice data.
+    """
+    logger.info(f"[TOOL] ========== tool_extract_slice CALLED ==========")
+    logger.info(f"[TOOL] tool_extract_slice - path: '{path}'")
+    logger.info(f"[TOOL] tool_extract_slice - slice_index: {slice_index}")
+    logger.info(f"[TOOL] tool_extract_slice - tool_context available: {tool_context is not None}")
+    
+    try:
+        img = img_feat_extractor.load_image(path)
+        slice_img = img_feat_extractor.extract_slice(img, slice_index)
+        
+        # Store in state if tool_context available
+        if tool_context:
+            tool_context.state['temp:last_extracted_slice'] = {
+                'path': path,
+                'slice_index': slice_index,
+                'shape': list(slice_img.shape)
+            }
+            logger.debug(f"[TOOL] tool_extract_slice - Stored slice info in state")
+        
+        response = {
+            "status": "success",
+            "shape": list(slice_img.shape),
+            "slice_index": slice_index if slice_index is not None else "middle",
+            "data": slice_img.tolist()
+        }
+        logger.info(f"[TOOL] tool_extract_slice COMPLETED - slice shape: {slice_img.shape}")
+        logger.info(f"[TOOL] ========== tool_extract_slice END ==========")
+        return response
+    except Exception as e:
+        logger.error(f"[TOOL] tool_extract_slice FAILED - error: {e}")
+        logger.info(f"[TOOL] ========== tool_extract_slice END (ERROR) ==========")
+        return {"status": "error", "message": str(e)}
 
 
 def tool_order_imaging(modality: str, region: str, clinical_context: str = "", tool_context: Optional[ToolContext] = None) -> str:
