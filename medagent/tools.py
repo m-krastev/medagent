@@ -250,6 +250,9 @@ async def access_patient_database(
                     hint=f"No lab results found for {patient_id}. Please provide the lab results as a string.",
                     payload={"patient_id": patient_id, "lab_results": ""},
                 )
+                
+            if not hasattr(tool_confirmation, 'payload'):
+                return "Error: No lab results provided."
             user_input = tool_confirmation.payload.get("lab_results", "")
             store_patient_lab_results_in_db(patient_id, user_input)
             tool_context.state[f"patient_lab_results_{patient_id}"] = user_input
